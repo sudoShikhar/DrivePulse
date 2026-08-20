@@ -102,6 +102,15 @@ func main() {
 	}
 	defer lock.Release()
 
+	// Initialize persistent daily file logging (7-day retention)
+	logsDir, err := GetDefaultLogsDir()
+	if err != nil {
+		logWarn("Unable to resolve logs directory: %v (falling back to memory-only logging)", err)
+	} else if err := defaultLogger.EnableFileLogging(logsDir, DefaultRetentionDays); err != nil {
+		logWarn("Unable to enable file logging: %v (falling back to memory-only logging)", err)
+	}
+	defer defaultLogger.Close()
+
 	logInfo("Starting DrivePulse v%s (autostart=%v)", Version, *flagAutostart)
 
 	cfgMgr, err := NewConfigManager(*flagConfig)

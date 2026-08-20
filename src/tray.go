@@ -20,19 +20,20 @@ type driveSlot struct {
 }
 
 type TrayController struct {
-	mu            sync.Mutex
-	cfgMgr        *ConfigManager
-	engine        *Engine
-	slots         []*driveSlot
-	headerItem    *systray.MenuItem
-	masterItem    *systray.MenuItem
-	pingNowItem   *systray.MenuItem
-	intervalMenu  *systray.MenuItem
-	intervalSubs  map[int]*systray.MenuItem
-	copyLogsItem  *systray.MenuItem
-	autostartItem *systray.MenuItem
-	refreshItem   *systray.MenuItem
-	exitItem      *systray.MenuItem
+	mu                 sync.Mutex
+	cfgMgr             *ConfigManager
+	engine             *Engine
+	slots              []*driveSlot
+	headerItem         *systray.MenuItem
+	masterItem         *systray.MenuItem
+	pingNowItem        *systray.MenuItem
+	intervalMenu       *systray.MenuItem
+	intervalSubs       map[int]*systray.MenuItem
+	copyLogsItem       *systray.MenuItem
+	openLogsFolderItem *systray.MenuItem
+	autostartItem      *systray.MenuItem
+	refreshItem        *systray.MenuItem
+	exitItem           *systray.MenuItem
 
 	stopChan chan struct{}
 	stopOnce sync.Once
@@ -87,6 +88,13 @@ func (c *TrayController) onReady() {
 
 	// Copy Logs
 	c.copyLogsItem = systray.AddMenuItem("📋 Copy Logs", "Copy session logs to clipboard")
+
+	// Open Logs Folder (with memory fallback indicator)
+	if defaultLogger.IsFileLoggingEnabled() {
+		c.openLogsFolderItem = systray.AddMenuItem("📂 Open Logs Folder", "Open persistent 7-day logs directory")
+	} else {
+		c.openLogsFolderItem = systray.AddMenuItem("⚠️ Logs (Memory Only)", "File logging unavailable - logs stored in memory only")
+	}
 
 	// Autostart
 	autostartLabel := "🚀 Start with Windows"
@@ -197,6 +205,30 @@ func (c *TrayController) eventLoop() {
 					c.copyLogsItem.SetTitle("✓ Logs Copied!")
 					time.Sleep(2 * time.Second)
 					c.copyLogsItem.SetTitle("📋 Copy Logs")
+				}()
+			}
+
+		case _, ok := <-c.openLogsFolderItem.ClickedCh:
+			if !ok {
+				return
+			}
+			if defaultLogger.IsFileLoggingEnabled() {
+				logsDir := defaultLogger.GetLogsDir()
+				if err := OpenFolder(logsDir); err != nil {
+					logError("Failed to open logs folder: %v", err)
+					go func() {
+						c.openLogsFolderItem.SetTitle("⚠️ Error Opening Folder")
+						time.Sleep(2 * time.Second)
+						c.openLogsFolderItem.SetTitle("📂 Open Logs Folder")
+					}()
+				}
+			} else {
+				// Memory only mode feedback
+				_ = defaultLogger.CopyToClipboard()
+				go func() {
+					c.openLogsFolderItem.SetTitle("📋 Copied (Memory Only)")
+					time.Sleep(2 * time.Second)
+					c.openLogsFolderItem.SetTitle("⚠️ Logs (Memory Only)")
 				}()
 			}
 
@@ -356,6 +388,16 @@ func (c *TrayController) refreshDrivesAndUI() {
 		c.autostartItem.SetTitle(fmt.Sprintf("🚀 %s [✓]", autostartName))
 	} else {
 		c.autostartItem.SetTitle(fmt.Sprintf("🚀 %s [ ]", autostartName))
+	}
+
+	if c.openLogsFolderItem != nil {
+		if defaultLogger.IsFileLoggingEnabled() {
+			c.openLogsFolderItem.SetTitle("📂 Open Logs Folder")
+			c.openLogsFolderItem.SetTooltip("Open persistent 7-day logs directory")
+		} else {
+			c.openLogsFolderItem.SetTitle("⚠️ Logs (Memory Only)")
+			c.openLogsFolderItem.SetTooltip("File logging unavailable - logs stored in memory only")
+		}
 	}
 
 	if !cfg.MasterEnabled || (activeCount == 0 && offlineCount == 0) {

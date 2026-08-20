@@ -989,3 +989,266 @@ func TestEngineInvalidIntervalDefaults(t *testing.T) {
 		t.Errorf("expected 45s default for zero interval, got %v", eng.interval)
 	}
 }
+
+func TestGetDefaultLogsDir(t *testing.T) {
+	logsDir, err := GetDefaultLogsDir()
+	if err != nil {
+		t.Fatalf("GetDefaultLogsDir failed: %v", err)
+	}
+	if !strings.Contains(logsDir, "DrivePulse") || !strings.HasSuffix(logsDir, LogsDirName) {
+		t.Errorf("unexpected logs dir: %s", logsDir)
+	}
+}
+
+func TestFileLoggingLifecycleAndContent(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_log_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	logger := NewRollingLogger(10)
+	if err := logger.EnableFileLogging(tempDir, 7); err != nil {
+		t.Fatalf("EnableFileLogging failed: %v", err)
+	}
+	defer logger.Close()
+
+	if !logger.IsFileLoggingEnabled() {
+		t.Errorf("expected file logging to be enabled")
+	}
+	if logger.GetLogsDir() != tempDir {
+		t.Errorf("expected logs dir %s, got %s", tempDir, logger.GetLogsDir())
+	}
+
+	logger.Log("INFO", "Starting test run")
+	logger.Log("PING", "Drive %s latency %dms", "E:\\", 12)
+	logger.Log("ERROR", "Disk I/O failed: %s", "timeout")
+
+	// Check in-memory buffer
+	memLogs := logger.GetAll()
+	if !strings.Contains(memLogs, "Starting test run") || !strings.Contains(memLogs, "Drive E:\\ latency 12ms") {
+		t.Errorf("missing logs in memory buffer: %s", memLogs)
+	}
+
+	// Check physical file on disk
+	todayStr := time.Now().Format("2006-01-02")
+	expectedFileName := filepath.Join(tempDir, fmt.Sprintf("drivepulse-%s.log", todayStr))
+	data, err := os.ReadFile(expectedFileName)
+	if err != nil {
+		t.Fatalf("failed to read log file %s: %v", expectedFileName, err)
+	}
+
+	fileContent := string(data)
+	if !strings.Contains(fileContent, "[INFO] Starting test run") ||
+		!strings.Contains(fileContent, "[PING] Drive E:\\ latency 12ms") ||
+		!strings.Contains(fileContent, "[ERROR] Disk I/O failed: timeout") {
+		t.Errorf("file content missing expected logs: %s", fileContent)
+	}
+}
+
+func TestFileLoggingPruneOldLogs7Days(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_prune_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	now := time.Now()
+	// Create mock log files before logger init:
+	// Today (0 days ago) - keep
+	// 2 days ago - keep
+	// 6 days ago - keep
+	// 7 days ago - keep
+	// 8 days ago - delete
+	// 15 days ago - delete
+	// 30 days ago - delete
+	daysOffsets := []int{0, 2, 6, 7, 8, 15, 30}
+	for _, offset := range daysOffsets {
+		d := now.AddDate(0, 0, -offset)
+		fname := filepath.Join(tempDir, fmt.Sprintf("drivepulse-%s.log", d.Format("2006-01-02")))
+		if err := os.WriteFile(fname, []byte(fmt.Sprintf("log content for offset %d", offset)), 0644); err != nil {
+			t.Fatalf("failed to write test log file: %v", err)
+		}
+	}
+
+	// Extra non-log file that should be preserved
+	keepFile := filepath.Join(tempDir, "other_file.txt")
+	_ = os.WriteFile(keepFile, []byte("preserve me"), 0644)
+
+	logger := NewRollingLogger(10)
+	// EnableFileLogging automatically triggers pruning on startup
+	if err := logger.EnableFileLogging(tempDir, 7); err != nil {
+		t.Fatalf("EnableFileLogging failed: %v", err)
+	}
+	defer logger.Close()
+
+	// Verify file statuses after initial startup prune
+	for _, offset := range daysOffsets {
+		d := now.AddDate(0, 0, -offset)
+		fname := filepath.Join(tempDir, fmt.Sprintf("drivepulse-%s.log", d.Format("2006-01-02")))
+		_, err := os.Stat(fname)
+		if offset <= 7 {
+			if os.IsNotExist(err) {
+				t.Errorf("expected file for offset %d days to be preserved, but was deleted", offset)
+			}
+		} else {
+			if !os.IsNotExist(err) {
+				t.Errorf("expected file for offset %d days to be deleted on startup, but still exists", offset)
+			}
+		}
+	}
+
+	if _, err := os.Stat(keepFile); os.IsNotExist(err) {
+		t.Errorf("expected non-log file to be preserved")
+	}
+
+	// Now add another old file and test explicit PruneOldLogs invocation
+	extraOldFile := filepath.Join(tempDir, fmt.Sprintf("drivepulse-%s.log", now.AddDate(0, 0, -12).Format("2006-01-02")))
+	if err := os.WriteFile(extraOldFile, []byte("extra old log"), 0644); err != nil {
+		t.Fatalf("failed to write extra old log: %v", err)
+	}
+	deleted := logger.PruneOldLogs(7)
+	if deleted != 1 {
+		t.Errorf("expected 1 deleted file during explicit prune, got %d", deleted)
+	}
+	if _, err := os.Stat(extraOldFile); !os.IsNotExist(err) {
+		t.Errorf("expected extra old file to be deleted")
+	}
+}
+
+func TestFileLoggingDateRotation(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_rotation_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	logger := NewRollingLogger(10)
+	if err := logger.EnableFileLogging(tempDir, 7); err != nil {
+		t.Fatalf("EnableFileLogging failed: %v", err)
+	}
+	defer logger.Close()
+
+	logger.Log("INFO", "Log for today")
+
+	// Verify today's file was created
+	todayStr := time.Now().Format("2006-01-02")
+	todayPath := filepath.Join(tempDir, fmt.Sprintf("drivepulse-%s.log", todayStr))
+	if _, err := os.Stat(todayPath); err != nil {
+		t.Fatalf("expected today's log file to exist: %v", err)
+	}
+
+	// Simulate yesterday's date in logger.currentDate to force rotation on next log
+	logger.mu.Lock()
+	logger.currentDate = "2000-01-01"
+	logger.mu.Unlock()
+
+	logger.Log("PING", "Log triggering rotation check")
+
+	data, err := os.ReadFile(todayPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+	if !strings.Contains(string(data), "Log for today") || !strings.Contains(string(data), "Log triggering rotation check") {
+		t.Errorf("expected log file to contain both messages: %s", string(data))
+	}
+}
+
+func TestFileLoggingFallbackMemoryOnly(t *testing.T) {
+	logger := NewRollingLogger(10)
+	// Empty logs dir should fail to enable file logging gracefully
+	err := logger.EnableFileLogging("", 7)
+	if err == nil {
+		t.Errorf("expected EnableFileLogging with empty dir to return error")
+	}
+	if logger.IsFileLoggingEnabled() {
+		t.Errorf("expected IsFileLoggingEnabled to be false after failed init")
+	}
+
+	// In-memory logging should still operate smoothly without errors or panics
+	logger.Log("WARN", "Memory only test message")
+	if !strings.Contains(logger.GetAll(), "Memory only test message") {
+		t.Errorf("expected in-memory logs to still be recorded")
+	}
+}
+
+func TestOpenFolderValidation(t *testing.T) {
+	// Empty path should return error
+	if err := OpenFolder(""); err == nil {
+		t.Errorf("expected error for empty folder path")
+	}
+
+	// Non-existent path should return error
+	if err := OpenFolder("Z:\\NonExistent_DrivePulse_Folder_12345"); err == nil {
+		t.Errorf("expected error for non-existent folder")
+	}
+}
+
+func TestRollingLoggerConcurrentWithFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_concurrent_file_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	logger := NewRollingLogger(50)
+	if err := logger.EnableFileLogging(tempDir, 7); err != nil {
+		t.Fatalf("EnableFileLogging failed: %v", err)
+	}
+	defer logger.Close()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				logger.Log("PING", "Goroutine %d message %d", id, j)
+				_ = logger.GetAll()
+				_ = logger.Count()
+				_ = logger.IsFileLoggingEnabled()
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if logger.Count() == 0 {
+		t.Errorf("expected non-zero entries in logger")
+	}
+}
+
+func TestRollingLoggerCloseLifecycle(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_close_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	logger := NewRollingLogger(10)
+	if err := logger.EnableFileLogging(tempDir, 7); err != nil {
+		t.Fatalf("EnableFileLogging failed: %v", err)
+	}
+
+	logger.Log("INFO", "Pre-close log")
+	if !logger.IsFileLoggingEnabled() {
+		t.Errorf("expected file logging to be enabled")
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+	if logger.IsFileLoggingEnabled() {
+		t.Errorf("expected file logging to be disabled after Close()")
+	}
+
+	// Double close should be idempotent and return nil
+	if err := logger.Close(); err != nil {
+		t.Errorf("expected second Close() to be safe and return nil, got %v", err)
+	}
+
+	// Logging after close should still record in-memory without error/panic
+	logger.Log("INFO", "Post-close log")
+	if !strings.Contains(logger.GetAll(), "Post-close log") {
+		t.Errorf("expected in-memory logs to record after file logger is closed")
+	}
+}

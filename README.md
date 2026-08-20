@@ -35,6 +35,7 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
 │  🔄 Ping Now                                 │  <-- Instant heartbeat trigger
 │  ⏱️ Interval: 45s ▸                          │  <-- Submenu: 30s, 45s, 60s, 90s
 │  📋 Copy Logs                                │  <-- Copies session log to clipboard
+│  📂 Open Logs Folder                         │  <-- Opens persistent 7-day logs folder
 │  🚀 Start with Windows / Linux [✓]          │  <-- Auto-start on boot
 │  🔄 Refresh Drives List                      │  <-- Re-scans USB ports
 ├──────────────────────────────────────────────┤
@@ -52,8 +53,12 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
 ## 4. State Persistence Across Restarts
 
 1. **Storage Path**:
-   - **Windows**: `%APPDATA%\DrivePulse\config.json`
-   - **Ubuntu/Linux**: `~/.config/drivepulse/config.json`
+   - **Configuration**:
+     - **Windows**: `%APPDATA%\DrivePulse\config.json`
+     - **Ubuntu/Linux**: `~/.config/DrivePulse/config.json`
+   - **Persistent Daily Logs (7-Day Rolling Retention)**:
+     - **Windows**: `%APPDATA%\DrivePulse\logs\drivepulse-YYYY-MM-DD.log`
+     - **Ubuntu/Linux**: `~/.config/DrivePulse/logs/drivepulse-YYYY-MM-DD.log`
 2. **Schema (`config.json`)**:
    ```json
    {
@@ -78,8 +83,10 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
    - Automatically installs executable to `%LOCALAPPDATA%\DrivePulse\` on Windows / `~/.local/bin/drivepulse` on Linux, sets up `.desktop` launcher and login autostart.
 2. **Single-Instance Protection**:
    - Windows Named Mutex / Linux `/proc` check to cleanly terminate orphan instances and guarantee only one tray icon exists.
-3. **Thread-Safe Rolling Session Logger & "Copy Logs"**:
-   - Bounded 20 KB in-memory log buffer tracking heartbeat timestamps and drive latencies, copyable via `github.com/atotto/clipboard`.
+3. **Dual In-Memory & Persistent 7-Day Rolling File Logger**:
+   - Bounded 500-entry circular buffer for instant `📋 Copy Logs` clipboard access.
+   - Daily rolling `.log` files (`drivepulse-YYYY-MM-DD.log`) stored in user AppData/config directory with automatic 7-day retention pruning.
+   - Tray context menu includes `📂 Open Logs Folder` with graceful memory-only fallback indicator.
 4. **Non-blocking UI & `forceUpdate` Channel**:
    - Context timeouts on all system operations and an asynchronous event loop with debounce protection.
 5. **Automated CI/CD GitHub Actions Workflow**:

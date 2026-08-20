@@ -303,3 +303,14 @@ Categories=Utility;System;
 func HideFile(filePath string) {
 	// No-op for Unix systems
 }
+
+func OpenFolder(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("empty folder path")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("folder does not exist: %w", err)
+	}
+	cmd := exec.Command("xdg-open", path)
+	return cmd.Start()
+}

@@ -305,6 +305,17 @@ func getTargetInstallPath() (string, error) {
 	return filepath.Join(localAppData, "DrivePulse", TargetAppName), nil
 }
 
+func OpenFolder(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("empty folder path")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("folder does not exist: %w", err)
+	}
+	cmd := exec.Command("explorer.exe", path)
+	return cmd.Start()
+}
+
 func HideFile(filePath string) {
 	ptr, err := syscall.UTF16PtrFromString(filePath)
 	if err == nil {
