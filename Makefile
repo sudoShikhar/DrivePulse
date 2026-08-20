@@ -37,9 +37,10 @@ run:
 ## build: Cross-compile for Windows and Linux and patch Windows PE resources
 build:
 ifeq ($(OS),Windows_NT)
-	powershell -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='windows'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_WINDOWS)\" -o $(BUILDS_DIR)/windows/$(APP_NAME).exe $(SRC_DIR); cd $(SRC_DIR); go run github.com/tc-hib/go-winres@latest patch --no-backup ../$(BUILDS_DIR)/windows/$(APP_NAME).exe; cd ..; $$env:GOOS='linux'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_LINUX)\" -o $(BUILDS_DIR)/linux/drivepulse $(SRC_DIR)"
+	powershell -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='windows'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_WINDOWS)\" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR); cd $(SRC_DIR); go run github.com/tc-hib/go-winres@latest patch --no-backup ../$(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe; cd ..; $$env:GOOS='linux'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_LINUX)\" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)"
 else
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS_WINDOWS)" -o $(BUILDS_DIR)/windows/$(APP_NAME).exe $(SRC_DIR)
-	cd $(SRC_DIR) && go run github.com/tc-hib/go-winres@latest patch --no-backup ../$(BUILDS_DIR)/windows/$(APP_NAME).exe
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS_LINUX)" -o $(BUILDS_DIR)/linux/drivepulse $(SRC_DIR)
+	mkdir -p $(BUILDS_DIR)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS_WINDOWS)" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR)
+	cd $(SRC_DIR) && go run github.com/tc-hib/go-winres@latest patch --no-backup ../$(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS_LINUX)" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)
 endif

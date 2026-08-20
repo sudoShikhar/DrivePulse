@@ -4,10 +4,10 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
-  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -26,13 +26,15 @@ jobs:
       - name: Run Tests
         run: make test
 
-  build:
-    name: Build All Binaries
+  build-and-release:
+    name: Build & Release
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
+      - name: Checkout Source (full history)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -40,47 +42,58 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      - name: Generate tag (IST)
+        id: tag
+        run: |
+          export TZ=Asia/Kolkata
+          TAG=$(date +'%Y_%m_%d_%H_%M_%S')
+          DISPLAY_TIME=$(date +'%d %b %Y, %H:%M IST')
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "DISPLAY_TIME=$DISPLAY_TIME" >> $GITHUB_OUTPUT
+
+      # Build Binaries with Makefile
       - name: Build Binaries with Makefile
-        run: make build VERSION=${{ github.ref_name }}
+        run: make build VERSION=${{ steps.tag.outputs.TAG }}
 
-      - name: Package Windows Artifact
+      - name: Generate changelog
+        id: changelog
         run: |
-          zip -j DrivePulse-windows-amd64.zip builds/windows/DrivePulse.exe README.md LICENSE
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-      - name: Package Linux Artifact
-        run: |
-          cp README.md LICENSE builds/linux/
-          tar -czvf DrivePulse-linux-amd64.tar.gz -C builds/linux drivepulse README.md LICENSE
+          if [ -z "$LAST_TAG" ]; then
+            LOG=$(git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+          else
+            LOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+          fi
 
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DrivePulse-windows-amd64.zip
-          path: DrivePulse-windows-amd64.zip
-
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DrivePulse-linux-amd64.tar.gz
-          path: DrivePulse-linux-amd64.tar.gz
-
-  release:
-    name: Create GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+          {
+            echo "CHANGELOG<<EOF"
+            echo "### 🚀 Changes"
+            echo ""
+            echo "$LOG"
+            echo ""
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: "DrivePulse Release #${{ github.run_number }} (${{ steps.tag.outputs.TAG }})"
+          body: |
+            ⚡ **DrivePulse Automated Release**
+            📅 **Built at:** ${{ steps.tag.outputs.DISPLAY_TIME }}
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
           files: |
-            */*.zip
-            */*.tar.gz
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+            builds/DrivePulse-windows-x64.exe
+            builds/DrivePulse-linux-x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -fa latest -m "Update latest tag"
+          git push origin latest --force
