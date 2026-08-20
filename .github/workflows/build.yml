@@ -1,0 +1,86 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run Tests
+        run: make test
+
+  build:
+    name: Build All Binaries
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build Binaries with Makefile
+        run: make build VERSION=${{ github.ref_name }}
+
+      - name: Package Windows Artifact
+        run: |
+          zip -j DrivePulse-windows-amd64.zip builds/windows/DrivePulse.exe README.md LICENSE
+
+      - name: Package Linux Artifact
+        run: |
+          cp README.md LICENSE builds/linux/
+          tar -czvf DrivePulse-linux-amd64.tar.gz -C builds/linux drivepulse README.md LICENSE
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DrivePulse-windows-amd64.zip
+          path: DrivePulse-windows-amd64.zip
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DrivePulse-linux-amd64.tar.gz
+          path: DrivePulse-linux-amd64.tar.gz
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            */*.zip
+            */*.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
