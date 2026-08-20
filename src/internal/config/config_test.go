@@ -147,6 +147,20 @@ func TestDefaultConfigAndPaths(t *testing.T) {
 	}
 }
 
+func TestNewInMemoryConfigManager(t *testing.T) {
+	mgr := NewInMemoryConfigManager()
+	if mgr == nil {
+		t.Fatalf("expected non-nil in-memory config manager")
+	}
+	cfg := mgr.Get()
+	if !cfg.MasterEnabled || cfg.IntervalSeconds != DefaultIntervalSeconds || !cfg.Autostart {
+		t.Errorf("unexpected default config values: %+v", cfg)
+	}
+	if len(cfg.SelectedDrives) != 0 {
+		t.Errorf("expected 0 selected drives, got %d", len(cfg.SelectedDrives))
+	}
+}
+
 func TestGetDefaultLogsDir(t *testing.T) {
 	logsDir, err := GetDefaultLogsDir()
 	if err != nil {
@@ -158,6 +172,10 @@ func TestGetDefaultLogsDir(t *testing.T) {
 }
 
 func TestConfigManagerCaseInsensitivity(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Skipping Windows-specific drive letter case insensitivity test on non-windows platform")
+	}
+
 	tempDir, err := os.MkdirTemp("", "drivepulse_case_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -289,6 +307,10 @@ func TestNormalizeDrivePath(t *testing.T) {
 }
 
 func TestConfigDriveSelectionSlashVariations(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Skipping Windows-specific drive slash variations test on non-windows platform")
+	}
+
 	tempDir, err := os.MkdirTemp("", "drivepulse_slash_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -417,5 +439,44 @@ func TestGetDefaultAppDir(t *testing.T) {
 	}
 	if !strings.HasSuffix(appDir, ConfigDirName) {
 		t.Errorf("expected appDir to end with %q, got %q", ConfigDirName, appDir)
+	}
+}
+
+func TestConfigManagerUnixPaths(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping Unix path test on Windows")
+	}
+
+	tempDir, err := os.MkdirTemp("", "drivepulse_unix_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	configPath := filepath.Join(tempDir, "config.json")
+	mgr, err := NewConfigManager(configPath)
+	if err != nil {
+		t.Fatalf("failed to create config manager: %v", err)
+	}
+
+	if err := mgr.SetDriveSelected("/media/usb", true); err != nil {
+		t.Fatalf("SetDriveSelected failed: %v", err)
+	}
+
+	if !mgr.IsDriveSelected("/media/usb") {
+		t.Errorf("expected /media/usb to be selected")
+	}
+	if !mgr.IsDriveSelected("/media/usb/") {
+		t.Errorf("expected /media/usb/ to be normalized and selected")
+	}
+	if mgr.IsDriveSelected("/media/other") {
+		t.Errorf("expected /media/other to not be selected")
+	}
+
+	if err := mgr.SetDriveSelected("/media/usb", false); err != nil {
+		t.Fatalf("SetDriveSelected(false) failed: %v", err)
+	}
+	if mgr.IsDriveSelected("/media/usb") {
+		t.Errorf("expected /media/usb to be unselected")
 	}
 }

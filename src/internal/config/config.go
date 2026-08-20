@@ -111,6 +111,15 @@ func NewConfigManager(customPath string) (*ConfigManager, error) {
 	return m, nil
 }
 
+// NewInMemoryConfigManager returns a ConfigManager initialized with default settings without loading from disk.
+func NewInMemoryConfigManager() *ConfigManager {
+	path, _ := GetDefaultConfigPath()
+	return &ConfigManager{
+		configPath: path,
+		config:     DefaultConfig(),
+	}
+}
+
 func (m *ConfigManager) Load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -65,3 +65,30 @@ func TestTrayControllerStopIdempotency(t *testing.T) {
 		t.Errorf("expected stopChan to be closed")
 	}
 }
+
+func TestTrayControllerOnExit(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_tray_exit_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	configPath := filepath.Join(tempDir, "config.json")
+	mgr, err := config.NewConfigManager(configPath)
+	if err != nil {
+		t.Fatalf("NewConfigManager failed: %v", err)
+	}
+
+	eng := engine.NewEngine(nil, 45, true)
+	eng.Start()
+	ctrl := NewTrayController(mgr, eng)
+
+	ctrl.onExit()
+
+	select {
+	case <-ctrl.stopChan:
+		// Channel closed successfully
+	default:
+		t.Errorf("expected stopChan to be closed after onExit")
+	}
+}

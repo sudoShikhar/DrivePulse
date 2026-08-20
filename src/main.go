@@ -69,6 +69,7 @@ func main() {
 	cfgMgr, err := config.NewConfigManager(*flagConfig)
 	if err != nil {
 		logger.Error("Failed to load configuration: %v. Initializing with defaults.", err)
+		cfgMgr = config.NewInMemoryConfigManager()
 	}
 
 	cfg := cfgMgr.Get()
