@@ -8,15 +8,16 @@ VERSION ?= 1.0.0
 LDFLAGS_WINDOWS := -H=windowsgui -s -w -X 'main.Version=$(VERSION)'
 LDFLAGS_LINUX := -s -w -X 'main.Version=$(VERSION)'
 
-.PHONY: help clean test run build
+.PHONY: help clean format test run build
 
 ## help: Show available targets
 help:
 	@echo DrivePulse Build Targets:
-	@echo   make clean - Remove $(BUILDS_DIR)/ directory
-	@echo   make test  - Run unit tests with code coverage
-	@echo   make run   - Run locally directly from source
-	@echo   make build - Compile Windows and Linux binaries and patch PE resources
+	@echo   make clean  - Remove $(BUILDS_DIR)/ directory
+	@echo   make format - Format code, organize imports, and run deep static analysis
+	@echo   make test   - Run unit tests with code coverage
+	@echo   make run    - Run locally directly from source
+	@echo   make build  - Compile Windows and Linux binaries and patch PE resources
 
 ## clean: Remove build artifacts
 clean:
@@ -25,6 +26,13 @@ ifeq ($(OS),Windows_NT)
 else
 	@rm -rf $(BUILDS_DIR)
 endif
+
+## format: Format code, organize imports, and run deep static analysis
+format:
+	gofmt -s -w .
+	go run golang.org/x/tools/cmd/goimports@latest -w .
+	go vet ./...
+	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
 ## test: Run unit tests with code coverage
 test:

@@ -989,4 +989,3 @@ func TestEngineInvalidIntervalDefaults(t *testing.T) {
 		t.Errorf("expected 45s default for zero interval, got %v", eng.interval)
 	}
 }
-
