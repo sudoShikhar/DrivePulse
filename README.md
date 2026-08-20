@@ -9,7 +9,7 @@
 ---
 
 ## 2. Technology Stack & Design Decisions
-- **Language**: **Go (Golang 1.24+)** for 100% native compilation.
+- **Language**: **Go (Golang 1.25+)** for 100% native compilation.
   - **Windows**: Compiles to a single lightweight `DrivePulse.exe` (with `-ldflags="-H=windowsgui -s -w"`, embedded `.ico` tray states, and Windows PE `.syso` resource embedding with zero CGO dependencies).
   - **Ubuntu / Linux**: Compiles to a native standalone ELF binary (`drivepulse`) integrating with D-Bus / StatusNotifierItem (AppIndicator).
 - **Footprint**: ~5–10 MB RAM, 0% CPU at idle, instant startup.
@@ -77,7 +77,7 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
 
 ---
 
-## 5. Architectural Patterns Adopted from `WarpGUI`
+## 5. Core Architectural Patterns
 
 1. **Zero-Configuration Self-Install & Auto-Setup**:
    - Automatically installs executable to `%LOCALAPPDATA%\DrivePulse\` on Windows / `~/.local/bin/drivepulse` on Linux, sets up `.desktop` launcher and login autostart.
@@ -94,43 +94,14 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
 
 ---
 
-## 6. Project Structure
-
-```
-DrivePulse/
-├── .github/
-│   └── workflows/
-│       └── build.yml             # Automated CI/CD release workflow
-├── src/
-│   ├── assets/
-│   │   ├── icon_active.ico / .png    # 🟢 Emerald Green active state
-│   │   ├── icon_disabled.ico / .png  # ⚪ Dark Gray disabled state
-│   │   └── icon_warning.ico / .png   # 🟡 Amber disconnected state
-│   ├── winres/
-│   │   └── winres.json               # Windows PE resource manifest & version config
-│   ├── assets.go                 # //go:embed for tray icon assets
-│   ├── config.go                 # %APPDATA% / ~/.config JSON persistence & rolling session logger
-│   ├── engine.go                 # Unbuffered O_SYNC heartbeat writer & ticker loop
-│   ├── main.go                   # App startup, flags, single instance mutex, tray loop
-│   ├── main_test.go              # Complete unit test suite
-│   ├── platform_linux.go         # Linux /proc/mounts detection, flock, and .desktop autostart
-│   ├── platform_windows.go       # Win32 volume discovery, Named Mutex, and HKCU Run autostart
-│   └── tray.go                   # Native systray menu builder & interactive handlers
-├── .gitignore
-├── LICENSE
-├── Makefile
-├── go.mod
-├── go.sum
-└── README.md
-```
-
----
-
-## 7. Build Instructions
+## 6. Build Instructions
 
 ```bash
 # Clean build artifacts
 make clean
+
+# Format code, organize imports, and run deep static analysis (gofmt, goimports, go vet, staticcheck)
+make format
 
 # Run all unit tests with code coverage
 make test

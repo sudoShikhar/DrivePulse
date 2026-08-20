@@ -204,7 +204,7 @@ X-GNOME-Autostart-enabled=true
 	return nil
 }
 
-// EnsureInstalled implements zero-config auto-setup (WarpGUI default behavior).
+// EnsureInstalled implements zero-config auto-setup.
 // If not running from ~/.local/bin/drivepulse, it copies itself there, sets up autostart and app menu entry,
 // launches the installed copy, and returns true to signal the launcher should exit.
 func EnsureInstalled() (bool, error) {

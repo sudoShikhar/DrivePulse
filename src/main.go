@@ -33,7 +33,7 @@ func main() {
 	}
 
 	if !*flagInPlace && os.Getenv("DRIVEPULSE_IN_PLACE") != "1" {
-		// Zero-Configuration Self-Install & Auto-Setup (WarpGUI default behavior)
+		// Zero-Configuration Self-Install & Auto-Setup
 		handedOff, err := platform.EnsureInstalled()
 		if err != nil {
 			logger.Error("Self-install error: %v. Running in-place.", err)

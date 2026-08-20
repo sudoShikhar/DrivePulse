@@ -211,7 +211,7 @@ func IsAutostartEnabled() (bool, error) {
 	return val != "", nil
 }
 
-// EnsureInstalled implements zero-config auto-setup (WarpGUI default behavior).
+// EnsureInstalled implements zero-config auto-setup.
 // If not running from %LOCALAPPDATA%\DrivePulse, it copies itself there, sets autostart,
 // creates Start Menu shortcut, launches the installed copy, and returns true to signal the launcher should exit.
 func EnsureInstalled() (bool, error) {
