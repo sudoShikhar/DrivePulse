@@ -1,14 +1,17 @@
-package main
+package engine
 
 import (
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sudoShikhar/DrivePulse/src/internal/config"
+	"github.com/sudoShikhar/DrivePulse/src/internal/logger"
+	"github.com/sudoShikhar/DrivePulse/src/internal/platform"
 )
 
 const (
@@ -44,7 +47,7 @@ func NewEngine(initialDrives []string, intervalSeconds int, enabled bool) *Engin
 	}
 	return &Engine{
 		interval:       time.Duration(intervalSeconds) * time.Second,
-		drives:         cleanDrives(initialDrives),
+		drives:         config.CleanDrives(initialDrives),
 		enabled:        enabled,
 		lastResults:    make(map[string]PingStatus),
 		triggerPing:    make(chan struct{}, 5),
@@ -53,26 +56,6 @@ func NewEngine(initialDrives []string, intervalSeconds int, enabled bool) *Engin
 		toggleChan:     make(chan bool, 5),
 		stopChan:       make(chan struct{}),
 	}
-}
-
-func cleanDrives(drives []string) []string {
-	var cleaned []string
-	seen := make(map[string]bool)
-	for _, d := range drives {
-		c := normalizeDrivePath(d)
-		if c == "" {
-			continue
-		}
-		key := c
-		if runtime.GOOS == "windows" {
-			key = strings.ToUpper(c)
-		}
-		if !seen[key] {
-			seen[key] = true
-			cleaned = append(cleaned, c)
-		}
-	}
-	return cleaned
 }
 
 func (e *Engine) Start() {
@@ -107,7 +90,7 @@ func (e *Engine) TriggerPingNow() {
 }
 
 func (e *Engine) SetDrives(drives []string) {
-	cleaned := cleanDrives(drives)
+	cleaned := config.CleanDrives(drives)
 	e.mu.Lock()
 	e.drives = cleaned
 	if !e.running {
@@ -197,7 +180,7 @@ func PingDrive(drivePath string) PingStatus {
 	syncErr := file.Sync()
 	closeErr := file.Close()
 
-	HideFile(pingPath)
+	platform.HideFile(pingPath)
 
 	latency := time.Since(start)
 	status.Latency = latency
@@ -226,7 +209,7 @@ func (e *Engine) runLoop() {
 	ticker := time.NewTicker(curInterval)
 	defer ticker.Stop()
 
-	e.performPings()
+	e.PerformPings()
 
 	for {
 		select {
@@ -234,41 +217,41 @@ func (e *Engine) runLoop() {
 			return
 
 		case <-ticker.C:
-			e.performPings()
+			e.PerformPings()
 
 		case <-e.triggerPing:
-			logInfo("Manual keep-alive trigger initiated")
-			e.performPings()
+			logger.Info("Manual keep-alive trigger initiated")
+			e.PerformPings()
 
 		case newDrives := <-e.updateDrives:
 			e.mu.Lock()
 			e.drives = newDrives
 			e.mu.Unlock()
-			logConfig("Target drives updated: %v", newDrives)
-			e.performPings()
+			logger.Config("Target drives updated: %v", newDrives)
+			e.PerformPings()
 
 		case newInterval := <-e.updateInterval:
 			e.mu.Lock()
 			e.interval = newInterval
 			e.mu.Unlock()
 			ticker.Reset(newInterval)
-			logConfig("Heartbeat interval updated to %v", newInterval)
+			logger.Config("Heartbeat interval updated to %v", newInterval)
 
 		case enabled := <-e.toggleChan:
 			e.mu.Lock()
 			e.enabled = enabled
 			e.mu.Unlock()
 			if enabled {
-				logInfo("Master Keep-Alive resumed [ON]")
-				e.performPings()
+				logger.Info("Master Keep-Alive resumed [ON]")
+				e.PerformPings()
 			} else {
-				logInfo("Master Keep-Alive paused [OFF]")
+				logger.Info("Master Keep-Alive paused [OFF]")
 			}
 		}
 	}
 }
 
-func (e *Engine) performPings() {
+func (e *Engine) PerformPings() {
 	e.mu.RLock()
 	enabled := e.enabled
 	drives := make([]string, len(e.drives))
@@ -294,31 +277,20 @@ func (e *Engine) performPings() {
 			resultsMu.Unlock()
 
 			if res.Success {
-				logPing("Drive %s -> OK (latency: %v)", res.DrivePath, res.Latency.Round(time.Millisecond))
+				logger.Ping("Drive %s -> OK (latency: %v)", res.DrivePath, res.Latency.Round(time.Millisecond))
 			} else {
-				logError("Drive %s -> FAILED: %v", res.DrivePath, res.Error)
+				logger.Error("Drive %s -> FAILED: %v", res.DrivePath, res.Error)
 			}
 		}(drive)
 	}
 
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
+	wg.Wait()
 
-	select {
-	case <-done:
-	case <-time.After(15 * time.Second):
-		logWarn("Keepalive ping cycle took longer than 15s (waiting for lagging drives in background)")
-	}
-
-	resultsMu.Lock()
+	now := time.Now()
 	e.mu.Lock()
-	e.lastPingTime = time.Now()
+	e.lastPingTime = now
 	for _, res := range results {
-		e.lastResults[res.DrivePath] = res
+		e.lastResults[filepath.Clean(res.DrivePath)] = res
 	}
 	e.mu.Unlock()
-	resultsMu.Unlock()
 }

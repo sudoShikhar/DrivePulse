@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package platform
 
 import (
 	"errors"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/sudoShikhar/DrivePulse/src/internal/assets"
+	"github.com/sudoShikhar/DrivePulse/src/internal/types"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -22,6 +24,8 @@ const (
 	RegistryValueKey = "DrivePulse"
 	TargetAppName    = "DrivePulse.exe"
 )
+
+var ErrAlreadyRunning = errors.New("another instance of DrivePulse is already running")
 
 type WindowsSingleInstanceHandle struct {
 	handle windows.Handle
@@ -34,11 +38,11 @@ func (w *WindowsSingleInstanceHandle) Release() {
 	}
 }
 
-func AcquireSingleInstance() (SingleInstanceHandle, error) {
+func AcquireSingleInstance() (types.SingleInstanceHandle, error) {
 	return AcquireSingleInstanceNamed(MutexName)
 }
 
-func AcquireSingleInstanceNamed(mutexName string) (SingleInstanceHandle, error) {
+func AcquireSingleInstanceNamed(mutexName string) (types.SingleInstanceHandle, error) {
 	namePtr, err := syscall.UTF16PtrFromString(mutexName)
 	if err != nil {
 		return nil, err
@@ -58,13 +62,13 @@ func AcquireSingleInstanceNamed(mutexName string) (SingleInstanceHandle, error) 
 	return &WindowsSingleInstanceHandle{handle: h}, nil
 }
 
-func DetectDrives() ([]DriveInfo, error) {
+func DetectDrives() ([]types.DriveInfo, error) {
 	driveBitmask, err := windows.GetLogicalDrives()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logical drives: %w", err)
 	}
 
-	var results []DriveInfo
+	var results []types.DriveInfo
 
 	for i := 0; i < 26; i++ {
 		if (driveBitmask & (1 << i)) == 0 {
@@ -79,20 +83,20 @@ func DetectDrives() ([]DriveInfo, error) {
 		}
 
 		dt := windows.GetDriveType(driveRootPtr)
-		var driveType DriveType
+		var driveType types.DriveType
 		switch dt {
 		case windows.DRIVE_REMOVABLE:
-			driveType = DriveTypeRemovable
+			driveType = types.DriveTypeRemovable
 		case windows.DRIVE_FIXED:
-			driveType = DriveTypeFixed
+			driveType = types.DriveTypeFixed
 		case windows.DRIVE_REMOTE:
-			driveType = DriveTypeNetwork
+			driveType = types.DriveTypeNetwork
 		case windows.DRIVE_CDROM:
-			driveType = DriveTypeOptical
+			driveType = types.DriveTypeOptical
 		case windows.DRIVE_RAMDISK:
 			driveType = "RAM Disk"
 		default:
-			driveType = DriveTypeUnknown
+			driveType = types.DriveTypeUnknown
 		}
 
 		if dt == windows.DRIVE_CDROM || dt == windows.DRIVE_NO_ROOT_DIR {
@@ -135,20 +139,20 @@ func DetectDrives() ([]DriveInfo, error) {
 
 		if volumeLabel == "" {
 			switch driveType {
-			case DriveTypeFixed:
+			case types.DriveTypeFixed:
 				volumeLabel = "Local Disk"
-			case DriveTypeRemovable:
+			case types.DriveTypeRemovable:
 				volumeLabel = "USB Drive"
-			case DriveTypeNetwork:
+			case types.DriveTypeNetwork:
 				volumeLabel = "Network Drive"
-			case DriveTypeOptical:
+			case types.DriveTypeOptical:
 				volumeLabel = "Optical Drive"
 			default:
 				volumeLabel = string(driveType)
 			}
 		}
 
-		results = append(results, DriveInfo{
+		results = append(results, types.DriveInfo{
 			Path:       strings.ToUpper(driveRoot),
 			Label:      volumeLabel,
 			FileSystem: fsName,
@@ -175,7 +179,7 @@ func SetAutostart(enable bool) error {
 			return fmt.Errorf("failed to get executable path: %w", err)
 		}
 
-		installedPath, err := getTargetInstallPath()
+		installedPath, err := GetTargetInstallPath()
 		if err == nil {
 			if _, statErr := os.Stat(installedPath); statErr == nil {
 				exePath = installedPath
@@ -216,7 +220,7 @@ func EnsureInstalled() (bool, error) {
 		return false, err
 	}
 
-	targetExe, err := getTargetInstallPath()
+	targetExe, err := GetTargetInstallPath()
 	if err != nil {
 		return false, err
 	}
@@ -247,7 +251,7 @@ func EnsureInstalled() (bool, error) {
 
 	// Write icon asset to install folder for Start Menu and shell shortcut indexing
 	iconPath := filepath.Join(targetDir, "icon.ico")
-	_ = os.WriteFile(iconPath, iconActiveICO, 0644)
+	_ = os.WriteFile(iconPath, assets.IconActiveICO, 0644)
 
 	_ = SetAutostart(true)
 	_ = CreateStartMenuShortcut(targetExe, iconPath)
@@ -293,7 +297,7 @@ func CreateStartMenuShortcut(exePath string, iconPath string) error {
 	return cmd.Run()
 }
 
-func getTargetInstallPath() (string, error) {
+func GetTargetInstallPath() (string, error) {
 	localAppData := os.Getenv("LOCALAPPDATA")
 	if localAppData == "" {
 		home, err := os.UserHomeDir()

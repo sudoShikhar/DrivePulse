@@ -1,4 +1,4 @@
-package main
+package tray
 
 import (
 	"fmt"
@@ -8,9 +8,15 @@ import (
 	"time"
 
 	"fyne.io/systray"
+	"github.com/sudoShikhar/DrivePulse/src/internal/assets"
+	"github.com/sudoShikhar/DrivePulse/src/internal/config"
+	"github.com/sudoShikhar/DrivePulse/src/internal/engine"
+	"github.com/sudoShikhar/DrivePulse/src/internal/logger"
+	"github.com/sudoShikhar/DrivePulse/src/internal/platform"
+	"github.com/sudoShikhar/DrivePulse/src/internal/types"
 )
 
-const maxDriveSlots = 26
+const MaxDriveSlots = 26
 
 type driveSlot struct {
 	item      *systray.MenuItem
@@ -21,8 +27,8 @@ type driveSlot struct {
 
 type TrayController struct {
 	mu                 sync.Mutex
-	cfgMgr             *ConfigManager
-	engine             *Engine
+	cfgMgr             *config.ConfigManager
+	engine             *engine.Engine
 	slots              []*driveSlot
 	headerItem         *systray.MenuItem
 	masterItem         *systray.MenuItem
@@ -39,11 +45,11 @@ type TrayController struct {
 	stopOnce sync.Once
 }
 
-func NewTrayController(cfgMgr *ConfigManager, eng *Engine) *TrayController {
+func NewTrayController(cfgMgr *config.ConfigManager, eng *engine.Engine) *TrayController {
 	return &TrayController{
 		cfgMgr:       cfgMgr,
 		engine:       eng,
-		slots:        make([]*driveSlot, maxDriveSlots),
+		slots:        make([]*driveSlot, MaxDriveSlots),
 		intervalSubs: make(map[int]*systray.MenuItem),
 		stopChan:     make(chan struct{}),
 	}
@@ -54,7 +60,7 @@ func (c *TrayController) Run() {
 }
 
 func (c *TrayController) onReady() {
-	systray.SetIcon(getActiveIcon())
+	systray.SetIcon(assets.GetActiveIcon())
 	systray.SetTitle("DrivePulse")
 	systray.SetTooltip("DrivePulse: External Drive Keep-Alive")
 
@@ -65,7 +71,7 @@ func (c *TrayController) onReady() {
 	systray.AddSeparator()
 
 	// Drive slots
-	for i := 0; i < maxDriveSlots; i++ {
+	for i := 0; i < MaxDriveSlots; i++ {
 		slotItem := systray.AddMenuItem("", "")
 		slotItem.Hide()
 		c.slots[i] = &driveSlot{item: slotItem}
@@ -81,7 +87,7 @@ func (c *TrayController) onReady() {
 
 	// Interval Submenu
 	c.intervalMenu = systray.AddMenuItem("⏱️ Interval: 45s ▸", "Set keep-alive interval")
-	for _, sec := range AllowedIntervals {
+	for _, sec := range config.AllowedIntervals {
 		subItem := c.intervalMenu.AddSubMenuItem(fmt.Sprintf("%d seconds", sec), fmt.Sprintf("Ping every %d seconds", sec))
 		c.intervalSubs[sec] = subItem
 	}
@@ -90,7 +96,7 @@ func (c *TrayController) onReady() {
 	c.copyLogsItem = systray.AddMenuItem("📋 Copy Logs", "Copy session logs to clipboard")
 
 	// Open Logs Folder (with memory fallback indicator)
-	if defaultLogger.IsFileLoggingEnabled() {
+	if logger.DefaultLogger.IsFileLoggingEnabled() {
 		c.openLogsFolderItem = systray.AddMenuItem("📂 Open Logs Folder", "Open persistent 7-day logs directory")
 	} else {
 		c.openLogsFolderItem = systray.AddMenuItem("⚠️ Logs (Memory Only)", "File logging unavailable - logs stored in memory only")
@@ -112,7 +118,7 @@ func (c *TrayController) onReady() {
 	c.exitItem = systray.AddMenuItem("❌ Exit DrivePulse", "Quit DrivePulse")
 
 	// Initial UI refresh
-	c.refreshDrivesAndUI()
+	c.RefreshDrivesAndUI()
 
 	// Launch event loop
 	go c.eventLoop()
@@ -128,7 +134,7 @@ func (c *TrayController) stop() {
 }
 
 func (c *TrayController) onExit() {
-	logInfo("DrivePulse shutting down")
+	logger.Info("DrivePulse shutting down")
 	c.stop()
 	c.engine.Stop()
 }
@@ -180,7 +186,7 @@ func (c *TrayController) eventLoop() {
 			newVal := !cfg.MasterEnabled
 			_ = c.cfgMgr.SetMasterEnabled(newVal)
 			c.engine.SetEnabled(newVal)
-			c.refreshDrivesAndUI()
+			c.RefreshDrivesAndUI()
 
 		case _, ok := <-c.pingNowItem.ClickedCh:
 			if !ok {
@@ -197,9 +203,9 @@ func (c *TrayController) eventLoop() {
 			if !ok {
 				return
 			}
-			err := defaultLogger.CopyToClipboard()
+			err := logger.DefaultLogger.CopyToClipboard()
 			if err != nil {
-				logError("Failed to copy logs to clipboard: %v", err)
+				logger.Error("Failed to copy logs to clipboard: %v", err)
 			} else {
 				go func() {
 					c.copyLogsItem.SetTitle("✓ Logs Copied!")
@@ -212,10 +218,10 @@ func (c *TrayController) eventLoop() {
 			if !ok {
 				return
 			}
-			if defaultLogger.IsFileLoggingEnabled() {
-				logsDir := defaultLogger.GetLogsDir()
-				if err := OpenFolder(logsDir); err != nil {
-					logError("Failed to open logs folder: %v", err)
+			if logger.DefaultLogger.IsFileLoggingEnabled() {
+				logsDir := logger.DefaultLogger.GetLogsDir()
+				if err := platform.OpenFolder(logsDir); err != nil {
+					logger.Error("Failed to open logs folder: %v", err)
 					go func() {
 						c.openLogsFolderItem.SetTitle("⚠️ Error Opening Folder")
 						time.Sleep(2 * time.Second)
@@ -223,8 +229,7 @@ func (c *TrayController) eventLoop() {
 					}()
 				}
 			} else {
-				// Memory only mode feedback
-				_ = defaultLogger.CopyToClipboard()
+				_ = logger.DefaultLogger.CopyToClipboard()
 				go func() {
 					c.openLogsFolderItem.SetTitle("📋 Copied (Memory Only)")
 					time.Sleep(2 * time.Second)
@@ -239,15 +244,15 @@ func (c *TrayController) eventLoop() {
 			cfg := c.cfgMgr.Get()
 			newVal := !cfg.Autostart
 			_ = c.cfgMgr.SetAutostart(newVal)
-			_ = SetAutostart(newVal)
-			c.refreshDrivesAndUI()
+			_ = platform.SetAutostart(newVal)
+			c.RefreshDrivesAndUI()
 
 		case _, ok := <-c.refreshItem.ClickedCh:
 			if !ok {
 				return
 			}
-			logInfo("Manual drive refresh triggered")
-			c.refreshDrivesAndUI()
+			logger.Info("Manual drive refresh triggered")
+			c.RefreshDrivesAndUI()
 
 		case _, ok := <-c.exitItem.ClickedCh:
 			if !ok {
@@ -277,28 +282,28 @@ func (c *TrayController) handleDriveClick(s *driveSlot) {
 	c.engine.SetDrives(cfg.SelectedDrives)
 
 	if newSelected {
-		logInfo("Enabled keep-alive on drive: %s", drivePath)
+		logger.Info("Enabled keep-alive on drive: %s", drivePath)
 	} else {
-		logInfo("Disabled keep-alive on drive: %s", drivePath)
+		logger.Info("Disabled keep-alive on drive: %s", drivePath)
 	}
 
-	c.refreshDrivesAndUI()
+	c.RefreshDrivesAndUI()
 }
 
 func (c *TrayController) handleIntervalClick(seconds int) {
 	_ = c.cfgMgr.SetInterval(seconds)
 	c.engine.SetInterval(seconds)
-	c.refreshDrivesAndUI()
+	c.RefreshDrivesAndUI()
 }
 
-func (c *TrayController) refreshDrivesAndUI() {
+func (c *TrayController) RefreshDrivesAndUI() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	cfg := c.cfgMgr.Get()
-	detectedDrives, _ := DetectDrives()
+	detectedDrives, _ := platform.DetectDrives()
 
-	detectedMap := make(map[string]DriveInfo)
+	detectedMap := make(map[string]types.DriveInfo)
 	for _, d := range detectedDrives {
 		detectedMap[filepath.Clean(d.Path)] = d
 	}
@@ -309,7 +314,7 @@ func (c *TrayController) refreshDrivesAndUI() {
 	var onlineActiveDrives []string
 
 	for _, d := range detectedDrives {
-		if slotIndex >= maxDriveSlots {
+		if slotIndex >= MaxDriveSlots {
 			break
 		}
 
@@ -331,7 +336,7 @@ func (c *TrayController) refreshDrivesAndUI() {
 
 		title := fmt.Sprintf("%s%s - %s%s", prefix, d.Path, d.Label, suffix)
 		slot.item.SetTitle(title)
-		slot.item.SetTooltip(fmt.Sprintf("Type: %s | Free: %s / %s", d.Type, FormatBytes(d.FreeBytes), FormatBytes(d.TotalBytes)))
+		slot.item.SetTooltip(fmt.Sprintf("Type: %s | Free: %s / %s", d.Type, types.FormatBytes(d.FreeBytes), types.FormatBytes(d.TotalBytes)))
 		slot.item.Show()
 
 		slotIndex++
@@ -340,7 +345,7 @@ func (c *TrayController) refreshDrivesAndUI() {
 	for _, confDrive := range cfg.SelectedDrives {
 		cleanPath := filepath.Clean(confDrive)
 		if _, online := detectedMap[cleanPath]; !online {
-			if slotIndex >= maxDriveSlots {
+			if slotIndex >= MaxDriveSlots {
 				break
 			}
 			slot := c.slots[slotIndex]
@@ -358,7 +363,7 @@ func (c *TrayController) refreshDrivesAndUI() {
 		}
 	}
 
-	for i := slotIndex; i < maxDriveSlots; i++ {
+	for i := slotIndex; i < MaxDriveSlots; i++ {
 		c.slots[i].drivePath = ""
 		c.slots[i].item.Hide()
 	}
@@ -391,7 +396,7 @@ func (c *TrayController) refreshDrivesAndUI() {
 	}
 
 	if c.openLogsFolderItem != nil {
-		if defaultLogger.IsFileLoggingEnabled() {
+		if logger.DefaultLogger.IsFileLoggingEnabled() {
 			c.openLogsFolderItem.SetTitle("📂 Open Logs Folder")
 			c.openLogsFolderItem.SetTooltip("Open persistent 7-day logs directory")
 		} else {
@@ -401,7 +406,7 @@ func (c *TrayController) refreshDrivesAndUI() {
 	}
 
 	if !cfg.MasterEnabled || (activeCount == 0 && offlineCount == 0) {
-		systray.SetIcon(getDisabledIcon())
+		systray.SetIcon(assets.GetDisabledIcon())
 		if !cfg.MasterEnabled {
 			c.headerItem.SetTitle("⚪ DrivePulse: Paused (Master OFF)")
 			systray.SetTooltip("DrivePulse: Paused (Master Switch OFF)")
@@ -410,11 +415,11 @@ func (c *TrayController) refreshDrivesAndUI() {
 			systray.SetTooltip("DrivePulse: Inactive (0 drives selected)")
 		}
 	} else if offlineCount > 0 && activeCount == 0 {
-		systray.SetIcon(getWarningIcon())
+		systray.SetIcon(assets.GetWarningIcon())
 		c.headerItem.SetTitle(fmt.Sprintf("🟡 DrivePulse: Warning (%d drive offline)", offlineCount))
 		systray.SetTooltip(fmt.Sprintf("DrivePulse: Warning (%d drive offline)", offlineCount))
 	} else {
-		systray.SetIcon(getActiveIcon())
+		systray.SetIcon(assets.GetActiveIcon())
 		warningSuffix := ""
 		if offlineCount > 0 {
 			warningSuffix = fmt.Sprintf(" [%d offline]", offlineCount)
@@ -433,7 +438,7 @@ func (c *TrayController) periodicPoller() {
 		case <-c.stopChan:
 			return
 		case <-ticker.C:
-			c.refreshDrivesAndUI()
+			c.RefreshDrivesAndUI()
 		}
 	}
 }

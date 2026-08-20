@@ -1,9 +1,10 @@
 //go:build !windows
 
-package main
+package platform
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sudoShikhar/DrivePulse/src/internal/assets"
+	"github.com/sudoShikhar/DrivePulse/src/internal/types"
 	"golang.org/x/sys/unix"
 )
 
@@ -18,6 +21,8 @@ const (
 	DesktopFileName = "drivepulse.desktop"
 	TargetAppName   = "drivepulse"
 )
+
+var ErrAlreadyRunning = errors.New("another instance of DrivePulse is already running")
 
 type LinuxSingleInstanceHandle struct {
 	file *os.File
@@ -31,11 +36,11 @@ func (l *LinuxSingleInstanceHandle) Release() {
 	}
 }
 
-func AcquireSingleInstance() (SingleInstanceHandle, error) {
+func AcquireSingleInstance() (types.SingleInstanceHandle, error) {
 	return AcquireSingleInstanceNamed("drivepulse.lock")
 }
 
-func AcquireSingleInstanceNamed(lockName string) (SingleInstanceHandle, error) {
+func AcquireSingleInstanceNamed(lockName string) (types.SingleInstanceHandle, error) {
 	lockPath := filepath.Join(os.TempDir(), lockName)
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
@@ -51,16 +56,16 @@ func AcquireSingleInstanceNamed(lockName string) (SingleInstanceHandle, error) {
 	return &LinuxSingleInstanceHandle{file: f}, nil
 }
 
-func DetectDrives() ([]DriveInfo, error) {
+func DetectDrives() ([]types.DriveInfo, error) {
 	file, err := os.Open("/proc/mounts")
 	if err != nil {
-		return []DriveInfo{
-			{Path: "/", Label: "Root", FileSystem: "rootfs", Type: DriveTypeFixed, IsReady: true},
+		return []types.DriveInfo{
+			{Path: "/", Label: "Root", FileSystem: "rootfs", Type: types.DriveTypeFixed, IsReady: true},
 		}, nil
 	}
 	defer file.Close()
 
-	var results []DriveInfo
+	var results []types.DriveInfo
 	seenMounts := make(map[string]bool)
 
 	scanner := bufio.NewScanner(file)
@@ -92,9 +97,9 @@ func DetectDrives() ([]DriveInfo, error) {
 		totalBytes := stat.Blocks * uint64(stat.Bsize)
 		freeBytes := stat.Bavail * uint64(stat.Bsize)
 
-		driveType := DriveTypeFixed
+		driveType := types.DriveTypeFixed
 		if strings.HasPrefix(mountPoint, "/media/") || strings.HasPrefix(mountPoint, "/run/media/") {
-			driveType = DriveTypeRemovable
+			driveType = types.DriveTypeRemovable
 		}
 
 		label := filepath.Base(mountPoint)
@@ -102,7 +107,7 @@ func DetectDrives() ([]DriveInfo, error) {
 			label = "Root OS"
 		}
 
-		results = append(results, DriveInfo{
+		results = append(results, types.DriveInfo{
 			Path:       mountPoint,
 			Label:      label,
 			FileSystem: fsType,
@@ -139,7 +144,7 @@ func getDesktopFilePath() (string, error) {
 	return filepath.Join(configDir, "autostart", DesktopFileName), nil
 }
 
-func getTargetInstallPath() (string, error) {
+func GetTargetInstallPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -168,7 +173,7 @@ func SetAutostart(enable bool) error {
 			return err
 		}
 
-		targetExe, err := getTargetInstallPath()
+		targetExe, err := GetTargetInstallPath()
 		if err == nil {
 			if _, statErr := os.Stat(targetExe); statErr == nil {
 				exePath = targetExe
@@ -208,7 +213,7 @@ func EnsureInstalled() (bool, error) {
 		return false, err
 	}
 
-	targetExe, err := getTargetInstallPath()
+	targetExe, err := GetTargetInstallPath()
 	if err != nil {
 		return false, err
 	}
@@ -263,13 +268,13 @@ func InstallLinuxIcons() error {
 			continue
 		}
 		iconPath := filepath.Join(iconDir, "drivepulse.png")
-		_ = os.WriteFile(iconPath, iconActivePNG, 0644)
+		_ = os.WriteFile(iconPath, assets.IconActivePNG, 0644)
 	}
 
 	// Also install to pixmaps for legacy desktop search
 	pixmapsDir := filepath.Join(home, ".local", "share", "pixmaps")
 	if err := os.MkdirAll(pixmapsDir, 0755); err == nil {
-		_ = os.WriteFile(filepath.Join(pixmapsDir, "drivepulse.png"), iconActivePNG, 0644)
+		_ = os.WriteFile(filepath.Join(pixmapsDir, "drivepulse.png"), assets.IconActivePNG, 0644)
 	}
 
 	return nil
