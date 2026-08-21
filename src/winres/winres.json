@@ -2,7 +2,7 @@
   "RT_GROUP_ICON": {
     "#1": {
       "0000": [
-        "../assets/icon_active.png"
+        "../internal/assets/icons/icon_active.png"
       ]
     }
   },

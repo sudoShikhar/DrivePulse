@@ -59,7 +59,7 @@ jobs:
           cache: true
 
       - name: Run Tests with Coverage
-        run: go test -v -cover ./...
+        run: make test
 
   build-check:
     name: Compilation Dry Run

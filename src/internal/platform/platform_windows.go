@@ -310,13 +310,14 @@ func GetTargetInstallPath() (string, error) {
 }
 
 func OpenFolder(path string) error {
-	if strings.TrimSpace(path) == "" {
+	cleanPath := filepath.Clean(strings.TrimSpace(path))
+	if cleanPath == "" || cleanPath == "." {
 		return fmt.Errorf("empty folder path")
 	}
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(cleanPath); err != nil {
 		return fmt.Errorf("folder does not exist: %w", err)
 	}
-	cmd := exec.Command("explorer.exe", path)
+	cmd := exec.Command("explorer.exe", cleanPath)
 	return cmd.Start()
 }
 

@@ -92,6 +92,14 @@ func TestOpenFolderValidation(t *testing.T) {
 		t.Errorf("expected error for empty folder path")
 	}
 
+	if err := OpenFolder("   "); err == nil {
+		t.Errorf("expected error for whitespace folder path")
+	}
+
+	if err := OpenFolder("."); err == nil {
+		t.Errorf("expected error for dot folder path")
+	}
+
 	if err := OpenFolder("Z:\\NonExistent_DrivePulse_Folder_12345"); err == nil {
 		t.Errorf("expected error for non-existent folder")
 	}

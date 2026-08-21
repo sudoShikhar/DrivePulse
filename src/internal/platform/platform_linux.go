@@ -236,11 +236,12 @@ func EnsureInstalled() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to create destination executable: %w", err)
 	}
-	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		dstFile.Close()
 		return false, fmt.Errorf("failed to copy executable: %w", err)
 	}
+	_ = dstFile.Close()
 
 	_ = InstallLinuxIcons()
 	_ = SetAutostart(true)
@@ -310,12 +311,13 @@ func HideFile(filePath string) {
 }
 
 func OpenFolder(path string) error {
-	if strings.TrimSpace(path) == "" {
+	cleanPath := filepath.Clean(strings.TrimSpace(path))
+	if cleanPath == "" || cleanPath == "." {
 		return fmt.Errorf("empty folder path")
 	}
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(cleanPath); err != nil {
 		return fmt.Errorf("folder does not exist: %w", err)
 	}
-	cmd := exec.Command("xdg-open", path)
+	cmd := exec.Command("xdg-open", cleanPath)
 	return cmd.Start()
 }

@@ -24,7 +24,7 @@ help:
 ## clean: Remove build artifacts
 clean:
 ifeq ($(OS),Windows_NT)
-	@if exist $(BUILDS_DIR) rmdir /s /q $(BUILDS_DIR)
+	@powershell -NoProfile -Command "if (Test-Path '$(BUILDS_DIR)') { Get-ChildItem -Path '$(BUILDS_DIR)' -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue; Remove-Item -Path '$(BUILDS_DIR)' -Force -ErrorAction SilentlyContinue; exit 0 }"
 else
 	@rm -rf $(BUILDS_DIR)
 endif
@@ -37,12 +37,12 @@ setup:
 ## lint: Run static analysis and vet checks
 lint:
 	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+	go tool staticcheck ./...
 
 ## format: Format code, organize imports, and run deep static analysis
 format:
 	gofmt -s -w .
-	go run golang.org/x/tools/cmd/goimports@latest -w .
+	go tool goimports -w .
 	$(MAKE) lint
 
 ## test: Run unit tests with code coverage
@@ -56,10 +56,16 @@ run:
 ## build: Cross-compile for Windows and Linux and patch Windows PE resources
 build:
 ifeq ($(OS),Windows_NT)
-	powershell -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='windows'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_WINDOWS)\" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR); cd $(SRC_DIR); go run github.com/tc-hib/go-winres@latest patch --no-backup ../$(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe; cd ..; $$env:GOOS='linux'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_LINUX)\" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)"
+	@if not exist $(BUILDS_DIR) mkdir $(BUILDS_DIR)
+	powershell -NoProfile -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='windows'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_WINDOWS)\" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR)"
+	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
+	powershell -NoProfile -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='linux'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_LINUX)\" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)"
 else
 	mkdir -p $(BUILDS_DIR)
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS_WINDOWS)" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR)
-	cd $(SRC_DIR) && go run github.com/tc-hib/go-winres@latest patch --no-backup ../$(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
+	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS_LINUX)" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)
 endif
+
+
+
