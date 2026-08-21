@@ -8,12 +8,14 @@ VERSION ?= 1.0.0
 LDFLAGS_WINDOWS := -H=windowsgui -s -w -X 'main.Version=$(VERSION)'
 LDFLAGS_LINUX := -s -w -X 'main.Version=$(VERSION)'
 
-.PHONY: help clean format test run build
+.PHONY: help clean setup lint format test run build
 
 ## help: Show available targets
 help:
 	@echo DrivePulse Build Targets:
 	@echo   make clean  - Remove $(BUILDS_DIR)/ directory
+	@echo   make setup  - Download and tidy Go dependencies
+	@echo   make lint   - Run static analysis without modifying files
 	@echo   make format - Format code, organize imports, and run deep static analysis
 	@echo   make test   - Run unit tests with code coverage
 	@echo   make run    - Run locally directly from source
@@ -27,12 +29,21 @@ else
 	@rm -rf $(BUILDS_DIR)
 endif
 
+## setup: Download and tidy Go dependencies
+setup:
+	go mod download
+	go mod tidy
+
+## lint: Run static analysis and vet checks
+lint:
+	go vet ./...
+	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
 ## format: Format code, organize imports, and run deep static analysis
 format:
 	gofmt -s -w .
 	go run golang.org/x/tools/cmd/goimports@latest -w .
-	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+	$(MAKE) lint
 
 ## test: Run unit tests with code coverage
 test:
