@@ -10,8 +10,8 @@
 
 ## 2. Technology Stack & Design Decisions
 - **Language**: **Go (Golang 1.25+)** for 100% native compilation.
-  - **Windows**: Compiles to a single lightweight `DrivePulse.exe` (with `-ldflags="-H=windowsgui -s -w"`, embedded `.ico` tray states, and Windows PE `.syso` resource embedding with zero CGO dependencies).
-  - **Ubuntu / Linux**: Compiles to a native standalone ELF binary (`drivepulse`) integrating with D-Bus / StatusNotifierItem (AppIndicator).
+  - **Windows**: Compiles to `DrivePulse-windows-x64.exe` (with `-ldflags="-H=windowsgui -s -w"`, embedded `.ico` tray states, and Windows PE `.syso` resource embedding with zero CGO dependencies; auto-installs locally as `DrivePulse.exe`).
+  - **Ubuntu / Linux**: Compiles to `DrivePulse-linux-x64` (native standalone ELF binary integrating with D-Bus / StatusNotifierItem (AppIndicator); auto-installs locally as `drivepulse`).
 - **Footprint**: ~5–10 MB RAM, 0% CPU at idle, instant startup.
 - **Asset Bundling**: Embedded directly in the binary using `//go:embed` and `go-winres`.
 
@@ -80,7 +80,7 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
 ## 5. Core Architectural Patterns
 
 1. **Zero-Configuration Self-Install & Auto-Setup**:
-   - Automatically installs executable to `%LOCALAPPDATA%\DrivePulse\` on Windows / `~/.local/bin/drivepulse` on Linux, sets up `.desktop` launcher and login autostart.
+   - Automatically installs executable to `%LOCALAPPDATA%\DrivePulse\DrivePulse.exe` on Windows / `~/.local/bin/drivepulse` on Linux, sets up `.desktop` launcher and login autostart.
 2. **Single-Instance Protection**:
    - Windows Named Mutex / Linux `/proc` check to cleanly terminate orphan instances and guarantee only one tray icon exists.
 3. **Dual In-Memory & Persistent 7-Day Rolling File Logger**:
@@ -90,7 +90,7 @@ Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a n
 4. **Non-blocking UI & `forceUpdate` Channel**:
    - Context timeouts on all system operations and an asynchronous event loop with debounce protection.
 5. **Automated CI/CD GitHub Actions Workflow**:
-   - Cross-compiles production binaries for Windows and Linux, attaches timestamped releases, and maintains a floating `latest` tag.
+   - Cross-compiles production binaries (`DrivePulse-windows-x64.exe` and `DrivePulse-linux-x64`), attaches timestamped releases, and maintains a floating `latest` tag.
 
 ---
 
@@ -112,3 +112,8 @@ make run
 # Generate PE resources and cross-compile both Windows & Linux into builds/
 make build
 ```
+
+### Build Outputs (`builds/`)
+- `builds/DrivePulse-windows-x64.exe` — Windows 64-bit GUI binary (no console window, patched with PE icon & version manifest)
+- `builds/DrivePulse-linux-x64` — Linux 64-bit ELF binary (AppIndicator / tray support)
+
