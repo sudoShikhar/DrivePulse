@@ -66,6 +66,3 @@ else
 	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS_LINUX)" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)
 endif
-
-
-

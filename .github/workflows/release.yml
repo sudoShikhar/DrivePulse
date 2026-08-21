@@ -81,7 +81,7 @@ jobs:
       - name: Generate Changelog
         id: changelog
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          LAST_TAG=$(git describe --tags --exclude='latest' --abbrev=0 HEAD~1 2>/dev/null || echo "")
 
           if [ -z "$LAST_TAG" ]; then
             LOG=$(git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
@@ -120,7 +120,7 @@ jobs:
 
       - name: Update latest tag
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -fa latest -m "Update latest tag to ${{ steps.release_info.outputs.TAG }}"
           git push origin latest --force

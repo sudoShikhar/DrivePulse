@@ -239,15 +239,23 @@ func EnsureInstalled() (bool, error) {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.OpenFile(targetExe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	tmpExe := targetExe + ".tmp"
+	dstFile, err := os.OpenFile(tmpExe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {
 		return false, fmt.Errorf("failed to create destination executable: %w", err)
 	}
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		dstFile.Close()
+		_ = os.Remove(tmpExe)
 		return false, fmt.Errorf("failed to copy executable: %w", err)
 	}
 	dstFile.Close()
+
+	_ = os.Remove(targetExe)
+	if err := os.Rename(tmpExe, targetExe); err != nil {
+		_ = os.Remove(tmpExe)
+		return false, fmt.Errorf("failed to replace destination executable: %w", err)
+	}
 
 	// Write icon asset to install folder for Start Menu and shell shortcut indexing
 	iconPath := filepath.Join(targetDir, "icon.ico")

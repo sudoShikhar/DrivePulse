@@ -128,5 +128,3 @@ make build
 ### Build Outputs (`builds/`)
 - `builds/DrivePulse-windows-x64.exe` — Windows 64-bit GUI binary (no console window, patched with PE icon & version manifest)
 - `builds/DrivePulse-linux-x64` — Linux 64-bit ELF binary (AppIndicator / tray support)
-
-
