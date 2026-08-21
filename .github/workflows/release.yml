@@ -1,17 +1,24 @@
-name: Build and Release
+name: Release
 
 on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v1.0.0, leave empty for timestamp tag)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
   test:
-    name: Run Tests
+    name: Run Tests & Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
@@ -22,6 +29,9 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+
+      - name: Run Linters
+        run: make lint
 
       - name: Run Tests
         run: make test
@@ -42,20 +52,33 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Generate tag (IST)
-        id: tag
+      - name: Determine Release Tag & Time
+        id: release_info
         run: |
           export TZ=Asia/Kolkata
-          TAG=$(date +'%Y_%m_%d_%H_%M_%S')
           DISPLAY_TIME=$(date +'%d %b %Y, %H:%M IST')
-          echo "TAG=$TAG" >> $GITHUB_OUTPUT
           echo "DISPLAY_TIME=$DISPLAY_TIME" >> $GITHUB_OUTPUT
 
-      # Build Binaries with Makefile
-      - name: Build Binaries with Makefile
-        run: make build VERSION=${{ steps.tag.outputs.TAG }}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG=$(date +'%Y_%m_%d_%H_%M_%S')
+          fi
 
-      - name: Generate changelog
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build Binaries with Makefile
+        run: make build VERSION=${{ steps.release_info.outputs.TAG }}
+
+      - name: Generate SHA256 Checksums
+        run: |
+          cd builds
+          sha256sum DrivePulse-windows-x64.exe DrivePulse-linux-x64 > checksums.txt
+          cat checksums.txt
+
+      - name: Generate Changelog
         id: changelog
         run: |
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
@@ -75,19 +98,23 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.TAG }}
-          name: "DrivePulse Release #${{ github.run_number }} (${{ steps.tag.outputs.TAG }})"
+          tag_name: ${{ steps.release_info.outputs.TAG }}
+          name: "DrivePulse ${{ steps.release_info.outputs.TAG }}"
           body: |
             ⚡ **DrivePulse Automated Release**
-            📅 **Built at:** ${{ steps.tag.outputs.DISPLAY_TIME }}
+            📅 **Built at:** ${{ steps.release_info.outputs.DISPLAY_TIME }}
 
             ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ### 📦 Artifacts & Integrity
+            Binary assets are attached below along with `checksums.txt` (SHA256).
           files: |
             builds/DrivePulse-windows-x64.exe
             builds/DrivePulse-linux-x64
+            builds/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -95,5 +122,5 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag -fa latest -m "Update latest tag"
+          git tag -fa latest -m "Update latest tag to ${{ steps.release_info.outputs.TAG }}"
           git push origin latest --force
