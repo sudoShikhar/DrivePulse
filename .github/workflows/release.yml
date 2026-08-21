@@ -102,7 +102,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_info.outputs.TAG }}
-          name: "DrivePulse ${{ steps.release_info.outputs.TAG }}"
+          name: "DrivePulse Release #${{ github.run_number }} (${{ steps.release_info.outputs.TAG }})"
           body: |
             ⚡ **DrivePulse Automated Release**
             📅 **Built at:** ${{ steps.release_info.outputs.DISPLAY_TIME }}
