@@ -4,9 +4,15 @@ SRC_DIR := ./src
 BUILDS_DIR := builds
 VERSION ?= 1.0.0
 
+ifeq ($(OS),Windows_NT)
+	BUILD_DATE := $(shell powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd'")
+else
+	BUILD_DATE := $(shell date +'%Y-%m-%d')
+endif
+
 # Go linker flags
-LDFLAGS_WINDOWS := -H=windowsgui -s -w -X 'main.Version=$(VERSION)'
-LDFLAGS_LINUX := -s -w -X 'main.Version=$(VERSION)'
+LDFLAGS_WINDOWS := -H=windowsgui -s -w -X 'main.Version=$(VERSION)' -X 'main.BuildDate=$(BUILD_DATE)'
+LDFLAGS_LINUX := -s -w -X 'main.Version=$(VERSION)' -X 'main.BuildDate=$(BUILD_DATE)'
 
 .PHONY: help clean setup lint format test run build
 

@@ -17,8 +17,8 @@
 <br/>
 
 <!-- Call to Action (CTA) Download Buttons & Cloud IDEs -->
-[![Download Windows EXE](https://img.shields.io/badge/Windows_EXE-Download-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/sudoShikhar/DrivePulse/releases/latest)
-[![Download Linux Binary](https://img.shields.io/badge/Linux_Binary-Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/sudoShikhar/DrivePulse/releases/latest)
+[![Download Windows EXE](https://img.shields.io/badge/Windows_EXE-Direct_Download-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-windows-x64.exe)
+[![Download Linux Binary](https://img.shields.io/badge/Linux_Binary-Direct_Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-linux-x64)
 [![Open in VS Code](https://img.shields.io/badge/Open_in-VS_Code_Web-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/github/sudoShikhar/DrivePulse)
 [![Open in GitHub Codespaces](https://img.shields.io/badge/Open_in-Codespaces-181717?style=for-the-badge&logo=github&logoColor=white)](https://codespaces.new/sudoShikhar/DrivePulse)
 
@@ -49,11 +49,12 @@
 
 ## ⚡ Installation & Quickstart
 
-### Option 1: Download Standalone Binary (Recommended)
-Download the latest pre-compiled binary directly from [GitHub Releases](https://github.com/sudoShikhar/DrivePulse/releases/latest):
+### Option 1: Direct Binary Download (Recommended)
+Download the latest standalone binary directly for your platform:
 
-* **Windows**: Download `DrivePulse-windows-x64.exe` and launch it directly.
-* **Linux**: Download `DrivePulse-linux-x64`, make it executable (`chmod +x DrivePulse-linux-x64`), and run `./DrivePulse-linux-x64`.
+* **Windows**: [**DrivePulse-windows-x64.exe**](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-windows-x64.exe) — direct standalone executable, zero dependencies.
+* **Linux**: [**DrivePulse-linux-x64**](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-linux-x64) — make executable (`chmod +x DrivePulse-linux-x64`) and run `./DrivePulse-linux-x64`.
+* **Integrity & Release Hub**: [checksums.txt (SHA256)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/checksums.txt) | [All Releases & Notes](https://github.com/sudoShikhar/DrivePulse/releases)
 
 ### Option 2: Build & Run from Source
 If building from source, DrivePulse uses a standard `Makefile` workflow:
@@ -86,36 +87,45 @@ make run
 
 ```mermaid
 flowchart TD
-    subgraph UI["System Tray Context & Event Loop"]
-        Tray["Systray Icon<br/>(Emerald Active / Amber Warning / Gray Inactive)"]
-        Menu["Tray Dropdown Menu<br/>(Drive List, Master Switch, Interval, Logs)"]
+    subgraph UI["1. System Tray Interface"]
+        TrayIcon["Systray Icon<br/>(🟢 Active / ⚪ Inactive / 🟡 Warning)"]
+        TrayMenu["Context Menu<br/>• Drive Toggles & Master Switch<br/>• Ping Interval (30s–90s)<br/>• Export Logs & Auto-Start"]
+        TrayIcon --> TrayMenu
     end
 
-    subgraph Core["DrivePulse Engine"]
-        Engine["Keep-Alive Ticker Loop<br/>(Default: 45s)"]
-        Hotplug["Drive Discovery & Hotplug Scanner"]
-        State["Config Manager<br/>(config.json)"]
-        Logger["Dual Logger<br/>(500-entry Ring Buffer + Daily .log)"]
+    subgraph Core["2. DrivePulse Runtime Engine"]
+        Config["Config Manager<br/>(config.json)"]
+        Scanner["Drive Discovery<br/>(Hotplug & Mount Scanner)"]
+        Engine["Keep-Alive Ticker Engine<br/>(Configurable Interval: 45s)"]
+
+        Config -->|Target Drives & Interval| Engine
+        Scanner -->|Active Drive Mounts| Engine
     end
 
-    subgraph Targets["Target Storage Devices"]
-        DriveE["Drive E:\\<br/>(External 16TB HDD)"]
-        DriveF["Drive F:\\<br/>(External 8TB HDD)"]
-        DriveC["Drive C:\\<br/>(OS NVMe SSD - Skipped)"]
+    subgraph Storage["3. Target Storage Operations"]
+        DriveE["Target Drive E: (External 16TB HDD)<br/>⚡ Heartbeat Ping (O_SYNC + fsync)"]
+        DriveF["Target Drive F: (External 8TB HDD)<br/>⚡ Heartbeat Ping (O_SYNC + fsync)"]
+        DriveC["System Drive C: (OS NVMe SSD)<br/>⏭️ Excluded / Skipped"]
     end
 
-    Tray --> Menu
-    Menu -->|Toggle / Adjust| State
-    State -->|Configured Targets| Engine
-    Hotplug -->|Active Mounts| Engine
-    Engine -->|O_SYNC + fsync Ping| DriveE
-    Engine -->|O_SYNC + fsync Ping| DriveF
-    Engine -->|Log heartbeat status| Logger
-    Logger -->|Copy Logs / Open Folder| Menu
+    subgraph Diagnostics["4. Logging & Diagnostics"]
+        RingBuf["500-Entry Ring Buffer<br/>(In-Memory Fast Clipboard Export)"]
+        DiskLog["Daily Rotating File Logger<br/>(7-Day Retention Cleanup)"]
+    end
+
+    TrayMenu -->|Persist Settings| Config
+    TrayMenu -->|Manual Refresh| Scanner
+
+    Engine -->|Micro-Ping Write| DriveE
+    Engine -->|Micro-Ping Write| DriveF
+    Engine -.->|Bypassed| DriveC
+
+    Engine -->|Live Session Events| RingBuf
+    Engine -->|Disk I/O Telemetry| DiskLog
 ```
 
 > [!IMPORTANT]
-> **Toolchain Prerequisites**: When compiling from source, **Go 1.24+** and `make` are required. Pre-compiled binaries downloaded from [GitHub Releases](https://github.com/sudoShikhar/DrivePulse/releases/latest) require zero runtime dependencies.
+> **Toolchain Prerequisites**: When compiling from source, **Go 1.24+** and `make` are required. Pre-compiled binaries downloaded directly from [GitHub Releases](https://github.com/sudoShikhar/DrivePulse/releases/latest) require zero runtime dependencies.
 
 ---
 
