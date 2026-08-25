@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/sudoShikhar/DrivePulse/src/internal/config"
 	"github.com/sudoShikhar/DrivePulse/src/internal/engine"
@@ -32,7 +31,7 @@ func main() {
 		return
 	}
 
-	if !*flagInPlace && os.Getenv("DRIVEPULSE_IN_PLACE") != "1" {
+	if !*flagInPlace {
 		// Zero-Configuration Self-Install & Auto-Setup
 		handedOff, err := platform.EnsureInstalled()
 		if err != nil {
