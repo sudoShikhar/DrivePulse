@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v1.0.0, leave empty for timestamp tag)'
+        description: 'Release version tag (e.g. v1.0.0, leave empty for automated numerical version)'
         required: false
         default: ''
 
@@ -59,12 +59,19 @@ jobs:
           DISPLAY_TIME=$(date +'%d %b %Y, %H:%M IST')
           echo "DISPLAY_TIME=$DISPLAY_TIME" >> $GITHUB_OUTPUT
 
+          BASE_VER=$(grep -m1 '^VERSION' Makefile | cut -d'=' -f2 | tr -d ' ' | sed 's/^v//')
+          if [ -z "$BASE_VER" ]; then
+            BASE_VER="1.0.0"
+          fi
+          MAJOR_MINOR=$(echo "$BASE_VER" | cut -d'.' -f1,2)
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
             TAG="${{ github.event.inputs.version }}"
+            [[ "$TAG" != v* ]] && TAG="v$TAG"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             TAG="${{ github.ref_name }}"
           else
-            TAG=$(date +'%Y_%m_%d_%H_%M_%S')
+            TAG="v${MAJOR_MINOR}.${{ github.run_number }}"
           fi
 
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
@@ -78,25 +85,63 @@ jobs:
           sha256sum DrivePulse-windows-x64.exe DrivePulse-linux-x64 > checksums.txt
           cat checksums.txt
 
-      - name: Generate Changelog
+      - name: Generate Structured Changelog
         id: changelog
         run: |
           LAST_TAG=$(git describe --tags --exclude='latest' --abbrev=0 HEAD~1 2>/dev/null || echo "")
-
-          if [ -z "$LAST_TAG" ]; then
-            LOG=$(git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
-          else
-            LOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+          RANGE="HEAD"
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
           fi
+
+          FEATS=$(git log "$RANGE" --grep="^[Ff]eat" --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+          FIXES=$(git log "$RANGE" --grep="^[Ff]ix" --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+          CHORES=$(git log "$RANGE" --grep="^\([Cc]hore\|[Dd]ocs\|[Cc]i\|[Rr]efactor\|[Ss]tyle\|[Tt]est\)" --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+          OTHERS=$(git log "$RANGE" --invert-grep --grep="^\([Ff]eat\|[Ff]ix\|[Cc]hore\|[Dd]ocs\|[Cc]i\|[Rr]efactor\|[Ss]tyle\|[Tt]est\)" --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
+
+          CL_FILE=$(mktemp)
+          {
+            echo "### 💡 Highlights"
+            echo "DrivePulse automated release build (${{ steps.release_info.outputs.TAG }})."
+            echo ""
+
+            if [ -n "$FEATS" ]; then
+              echo "### 🚀 Features & Enhancements"
+              echo "$FEATS"
+              echo ""
+            fi
+
+            if [ -n "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+
+            if [ -n "$CHORES" ]; then
+              echo "### 🧹 Maintenance & Chores"
+              echo "$CHORES"
+              echo ""
+            fi
+
+            if [ -n "$OTHERS" ]; then
+              echo "### 📋 Other Commits"
+              echo "$OTHERS"
+              echo ""
+            fi
+
+            if [ -n "$LAST_TAG" ]; then
+              echo "### 🔗 Full Changelog"
+              echo "https://github.com/${{ github.repository }}/compare/${LAST_TAG}...${{ steps.release_info.outputs.TAG }}"
+              echo ""
+            fi
+          } > "$CL_FILE"
 
           {
             echo "CHANGELOG<<EOF"
-            echo "### 🚀 Changes"
-            echo ""
-            echo "$LOG"
-            echo ""
+            cat "$CL_FILE"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+          rm -f "$CL_FILE"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
