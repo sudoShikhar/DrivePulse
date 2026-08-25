@@ -1,130 +1,256 @@
-# DrivePulse — Project Summary & Architecture Blueprint
+<a id="readme-top"></a>
 
-## 1. Problem Statement & Root Cause
-- **The Issue**: External 16TB mechanical hard drives (WD Elements/My Book, Seagate Expansion, etc.) have aggressive firmware-level APM / standby sleep timers (typically 30–120s of inactivity).
-- **Why Explorer Freezes**: When File Explorer or any application queries the drive, the OS initiates synchronous I/O and freezes for 3–8 seconds while the mechanical platters spin up from 0 to 5400/7200 RPM.
-- **Mechanical Wear**: Continual stop/start cycles wear out the spindle motor and consume head load/unload cycles.
-- **The Solution**: A native Go system tray utility (**`DrivePulse`**) that sends an unbuffered timestamp heartbeat (`.drivepulse.ping` via `O_SYNC` + `fsync`) every ~45 seconds to keep selected drives responsive at all times.
+<div align="center">
 
----
+# ⚡ DrivePulse
 
-## 2. Technology Stack & Design Decisions
-- **Language**: **Go (Golang 1.26+)** for 100% native compilation and tool tracking via Go tool directives.
-  - **Windows**: Compiles to `DrivePulse-windows-x64.exe` (with `-ldflags="-H=windowsgui -s -w"`, embedded `.ico` tray states, and Windows PE `.syso` resource embedding with zero CGO dependencies; auto-installs locally as `DrivePulse.exe`).
-  - **Ubuntu / Linux**: Compiles to `DrivePulse-linux-x64` (native standalone ELF binary integrating with D-Bus / StatusNotifierItem (AppIndicator); auto-installs locally as `drivepulse`).
-- **Footprint**: ~5–10 MB RAM, 0% CPU at idle, instant startup.
-- **Asset Bundling**: Embedded directly in the binary using `//go:embed` and `go-winres`.
+**Native Go system tray utility to prevent external HDDs from sleeping and freezing File Explorer.**
 
----
+<!-- Primary Metadata & Build Badges -->
+[![GitHub Release](https://img.shields.io/github/v/release/sudoShikhar/DrivePulse?style=flat-square&logo=github&color=blue)](https://github.com/sudoShikhar/DrivePulse/releases/latest)
+[![CI Build](https://github.com/sudoShikhar/DrivePulse/actions/workflows/ci.yml/badge.svg)](https://github.com/sudoShikhar/DrivePulse/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL_v3-blue.svg?style=flat-square)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/sudoShikhar/DrivePulse?style=flat-square&logo=github&color=gold)](https://github.com/sudoShikhar/DrivePulse/stargazers)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/sudoShikhar/DrivePulse/pulls)
 
-## 3. UI/UX & System Tray Dropdown Menu
+<br/>
 
-### System Tray Dropdown Layout
-Clicking the tray icon (Windows bottom-right taskbar / Ubuntu top bar) opens a native context dropdown:
+<!-- Call to Action (CTA) Download Buttons & Cloud IDEs -->
+[![Download Windows EXE](https://img.shields.io/badge/Windows_EXE-Download-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/sudoShikhar/DrivePulse/releases/latest)
+[![Download Linux Binary](https://img.shields.io/badge/Linux_Binary-Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/sudoShikhar/DrivePulse/releases/latest)
+[![Open in VS Code](https://img.shields.io/badge/Open_in-VS_Code_Web-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/github/sudoShikhar/DrivePulse)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Open_in-Codespaces-181717?style=for-the-badge&logo=github&logoColor=white)](https://codespaces.new/sudoShikhar/DrivePulse)
 
-```text
-┌──────────────────────────────────────────────┐
-│  🟢 DrivePulse: Active (2 drives awake)     │
-├──────────────────────────────────────────────┤
-│  [✓] E:\ - 16TB Elements (Active)           │  <-- Click to toggle
-│  [✓] F:\ - 8TB Backup (Active)              │  <-- Click to toggle
-│  [ ] D:\ - Internal HDD (Disabled)          │  <-- Click to toggle
-│  [ ] C:\ - OS NVMe SSD (Disabled)           │  <-- Click to toggle
-├──────────────────────────────────────────────┤
-│  ⚡ Master Keep-Alive: [ ON ]                │  <-- Master pause/resume
-│  🔄 Ping Now                                 │  <-- Instant heartbeat trigger
-│  ⏱️ Interval: 45s ▸                          │  <-- Submenu: 30s, 45s, 60s, 90s
-│  📋 Copy Logs                                │  <-- Copies session log to clipboard
-│  📂 Open Logs Folder                         │  <-- Opens persistent 7-day logs folder
-│  🚀 Start with Windows / Linux [✓]          │  <-- Auto-start on boot
-│  🔄 Refresh Drives List                      │  <-- Re-scans USB ports
-├──────────────────────────────────────────────┤
-│  ❌ Exit DrivePulse                          │
-└──────────────────────────────────────────────┘
-```
-
-### Visual Icon States:
-- 🟢 **Vibrant Emerald Green**: Active (at least 1 drive is actively kept awake).
-- ⚪ **Dark Gray Monochrome**: Inactive (all drives disabled or master switch is OFF).
-- 🟡 **Amber / Warning**: Configured drive(s) temporarily disconnected.
+</div>
 
 ---
 
-## 4. State Persistence Across Restarts
-
-1. **Storage Path**:
-   - **Configuration**:
-     - **Windows**: `%APPDATA%\DrivePulse\config.json`
-     - **Ubuntu/Linux**: `~/.config/DrivePulse/config.json`
-   - **Persistent Daily Logs (7-Day Rolling Retention)**:
-     - **Windows**: `%APPDATA%\DrivePulse\logs\drivepulse-YYYY-MM-DD.log`
-     - **Ubuntu/Linux**: `~/.config/DrivePulse/logs/drivepulse-YYYY-MM-DD.log`
-2. **Schema (`config.json`)**:
-   ```json
-   {
-     "master_enabled": true,
-     "interval_seconds": 45,
-     "selected_drives": [
-       "E:\\",
-       "F:\\"
-     ],
-     "autostart": true
-   }
-   ```
-3. **Hotplug & Eject Resilience**:
-   - On app launch, matches connected drives with `selected_drives`, checks `[✓]`, and resumes pings immediately.
-   - If an enabled drive is unplugged, `DrivePulse` retains it in config and automatically resumes heartbeats the moment it is plugged back in.
+## 📑 Table of Contents
+- [Motivation & Problem Solved](#motivation--problem-solved)
+- [Installation & Quickstart](#installation--quickstart)
+- [Key Features](#key-features)
+- [Architecture & Data Flow](#architecture--data-flow)
+- [System Tray UI & Visual Indicators](#system-tray-ui--visual-indicators)
+- [CLI Flags & Runtime Usage](#cli-flags--runtime-usage)
+- [Configuration Schema](#configuration-schema)
+- [Development & Build Workflow](#development--build-workflow)
+- [Troubleshooting & FAQ](#troubleshooting--faq)
+- [License](#license)
 
 ---
 
-## 5. Core Architectural Patterns
+## 💡 Motivation & Problem Solved
 
-1. **Zero-Configuration Self-Install & Auto-Setup**:
-   - Automatically installs executable to `%LOCALAPPDATA%\DrivePulse\DrivePulse.exe` on Windows / `~/.local/bin/drivepulse` on Linux, sets up `.desktop` launcher and login autostart.
-2. **Single-Instance Protection**:
-   - Windows Named Mutex / Linux `/proc` check to cleanly terminate orphan instances and guarantee only one tray icon exists.
-3. **Dual In-Memory & Persistent 7-Day Rolling File Logger**:
-   - Bounded 500-entry circular buffer for instant `📋 Copy Logs` clipboard access.
-   - Daily rolling `.log` files (`drivepulse-YYYY-MM-DD.log`) stored in user AppData/config directory with automatic 7-day retention pruning.
-   - Tray context menu includes `📂 Open Logs Folder` with graceful memory-only fallback indicator.
-4. **Non-blocking UI & `forceUpdate` Channel**:
-   - Context timeouts on all system operations and an asynchronous event loop with debounce protection.
-5. **Automated CI/CD GitHub Actions Workflow**:
-   - Cross-compiles production binaries (`DrivePulse-windows-x64.exe` and `DrivePulse-linux-x64`), attaches timestamped releases, and maintains a floating `latest` tag.
+* **The Problem**: External mechanical hard drives (such as WD Elements, Seagate Expansion, etc.) employ aggressive internal firmware APM / standby sleep timers (~30–120s of idle time). Whenever Windows File Explorer, a terminal, or any application attempts to access the drive or open a file dialog, the entire operating system interface can freeze for 3–8 seconds while platters spin up from 0 to 5400/7200 RPM. Continual spin-down cycles also accelerate mechanical wear and tear on the spindle motor and head armatures.
+* **The Solution**: **DrivePulse** is a lightweight, zero-dependency native Go tray utility that writes a micro-timestamp heartbeat (`.drivepulse.ping` via unbuffered `O_SYNC` + `fsync`) at configurable intervals (default: 45s), keeping selected external drives responsive 24/7 without preventing OS sleep.
 
 ---
 
-## 6. Command-Line Options & Flags
+## ⚡ Installation & Quickstart
 
-| Flag / Variable | Description |
-| :--- | :--- |
-| `-version` | Displays version and build date. |
-| `-config <path>` | Specifies a custom path to `config.json`. |
-| `-autostart` | Indicates launch initiated by the OS startup mechanism. |
-| `-in-place` | Runs directly from the current working directory without self-installing to user AppData. |
-| `DRIVEPULSE_IN_PLACE=1` | Environment variable equivalent to `-in-place`. |
+### Option 1: Download Standalone Binary (Recommended)
+Download the latest pre-compiled binary directly from [GitHub Releases](https://github.com/sudoShikhar/DrivePulse/releases/latest):
 
----
+* **Windows**: Download `DrivePulse-windows-x64.exe` and launch it directly.
+* **Linux**: Download `DrivePulse-linux-x64`, make it executable (`chmod +x DrivePulse-linux-x64`), and run `./DrivePulse-linux-x64`.
 
-## 7. Build Instructions
+### Option 2: Build & Run from Source
+If building from source, DrivePulse uses a standard `Makefile` workflow:
 
 ```bash
-# Clean build artifacts
-make clean
+# Clone the repository
+git clone https://github.com/sudoShikhar/DrivePulse.git
+cd DrivePulse
 
-# Format code, organize imports, and run deep static analysis (gofmt, goimports, go vet, staticcheck)
-make format
-
-# Run all unit tests with code coverage
-make test
-
-# Run locally directly from source
+# Setup dependencies and launch application locally
+make setup
 make run
-
-# Generate PE resources and cross-compile both Windows & Linux into builds/
-make build
 ```
 
-### Build Outputs (`builds/`)
-- `builds/DrivePulse-windows-x64.exe` — Windows 64-bit GUI binary (no console window, patched with PE icon & version manifest)
-- `builds/DrivePulse-linux-x64` — Linux 64-bit ELF binary (AppIndicator / tray support)
+---
+
+## 🚀 Key Features
+
+* **⚡ Zero-Lag Drive Access**: Eliminates 3–8s File Explorer and application freezes by keeping chosen drives in active ready state.
+* **🎛️ Per-Drive Toggle & Selection**: Individually enable or disable keep-alive heartbeats for specific drive letters or mount points.
+* **🛡️ Hotplug & Eject Resilience**: Disconnected drives remain saved in settings and resume heartbeats automatically the moment they are reconnected.
+* **🪶 Ultra-Low Footprint**: ~5–10 MB RAM, 0% CPU consumption at idle, zero background overhead.
+* **📦 Single Standalone Binary**: 100% pure Go with embedded PE icons and resources (`//go:embed` + `go-winres`)—no DLL dependencies or CGO required.
+* **📝 7-Day Rolling File Logs & Clipboard Export**: Daily rotating log files with automatic 7-day retention cleanup and a one-click tray menu option to copy recent logs to clipboard.
+* **🔄 Seamless Auto-Start & Self-Installation**: Optional OS startup integration for Windows (`Registry Run`) and Linux (`~/.config/autostart/drivepulse.desktop`).
+
+---
+
+## 🏗️ Architecture & Data Flow
+
+```mermaid
+flowchart TD
+    subgraph UI["System Tray Context & Event Loop"]
+        Tray["Systray Icon<br/>(Emerald Active / Amber Warning / Gray Inactive)"]
+        Menu["Tray Dropdown Menu<br/>(Drive List, Master Switch, Interval, Logs)"]
+    end
+
+    subgraph Core["DrivePulse Engine"]
+        Engine["Keep-Alive Ticker Loop<br/>(Default: 45s)"]
+        Hotplug["Drive Discovery & Hotplug Scanner"]
+        State["Config Manager<br/>(config.json)"]
+        Logger["Dual Logger<br/>(500-entry Ring Buffer + Daily .log)"]
+    end
+
+    subgraph Targets["Target Storage Devices"]
+        DriveE["Drive E:\\<br/>(External 16TB HDD)"]
+        DriveF["Drive F:\\<br/>(External 8TB HDD)"]
+        DriveC["Drive C:\\<br/>(OS NVMe SSD - Skipped)"]
+    end
+
+    Tray --> Menu
+    Menu -->|Toggle / Adjust| State
+    State -->|Configured Targets| Engine
+    Hotplug -->|Active Mounts| Engine
+    Engine -->|O_SYNC + fsync Ping| DriveE
+    Engine -->|O_SYNC + fsync Ping| DriveF
+    Engine -->|Log heartbeat status| Logger
+    Logger -->|Copy Logs / Open Folder| Menu
+```
+
+> [!IMPORTANT]
+> **Toolchain Prerequisites**: When compiling from source, **Go 1.24+** and `make` are required. Pre-compiled binaries downloaded from [GitHub Releases](https://github.com/sudoShikhar/DrivePulse/releases/latest) require zero runtime dependencies.
+
+---
+
+## 🖥️ System Tray UI & Visual Indicators
+
+### Context Dropdown Menu Layout
+Clicking the system tray icon opens the native context menu:
+
+```text
+┌─────────────────────────────────────────────────┐
+│  🟢 DrivePulse: Active (2 drives awake)         │
+├─────────────────────────────────────────────────┤
+│  [✓] E:\ - 16TB Elements (Active)               │  <-- Click to toggle
+│  [✓] F:\ - 8TB Backup (Active)                  │  <-- Click to toggle
+│  [ ] D:\ - Internal HDD (Disabled)              │  <-- Click to toggle
+│  [ ] C:\ - OS NVMe SSD (Disabled)               │  <-- Click to toggle
+├─────────────────────────────────────────────────┤
+│  ⚡ Master Keep-Alive: [ ON ]                    │  <-- Master pause/resume
+│  🔄 Ping Now                                    │  <-- Instant heartbeat trigger
+│  ⏱️ Interval: 45s ▸                             │  <-- Submenu: 30s, 45s, 60s, 90s
+│  📋 Copy Logs                                   │  <-- Copies session log to clipboard
+│  📁 Open Logs Folder                            │  <-- Opens persistent 7-day logs folder
+│  🚀 Start with Windows / Linux [✓]              │  <-- Auto-start on system boot
+│  🔍 Refresh Drives List                         │  <-- Re-scans connected storage
+├─────────────────────────────────────────────────┤
+│  ❌ Exit DrivePulse                             │
+└─────────────────────────────────────────────────┘
+```
+
+### Visual Icon Indicators
+* 🟢 **Vibrant Emerald Green**: Active (at least 1 drive is actively kept awake).
+* ⚪ **Dark Gray Monochrome**: Inactive (all drives disabled or master switch is OFF).
+* 🟡 **Amber / Warning**: One or more configured drives are currently disconnected.
+
+---
+
+## 💻 CLI Flags & Runtime Usage
+
+When invoking the compiled binary directly from the command line:
+
+```bash
+# Launch with custom configuration path
+./DrivePulse -config "/path/to/custom-config.json"
+
+# Launch in-place without self-installing to AppData
+./DrivePulse -in-place
+
+# Check version and build information
+./DrivePulse -version
+```
+
+### Flags Reference Table
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `-version` | `bool` | `false` | Displays application version and build date |
+| `-config <path>` | `string` | Auto-detected AppData path | Specifies custom path to `config.json` |
+| `-autostart` | `bool` | `false` | Flag passed when launched via OS startup |
+| `-in-place` | `bool` | `false` | Runs in current directory without self-installing to AppData |
+
+### State Persistence & Rolling Logs
+| OS | Configuration File Path | 7-Day Rolling Logs Directory |
+| :--- | :--- | :--- |
+| **Windows** | `%APPDATA%\DrivePulse\config.json` | `%APPDATA%\DrivePulse\logs\drivepulse-YYYY-MM-DD.log` |
+| **Linux** | `~/.config/DrivePulse/config.json` | `~/.config/DrivePulse/logs/drivepulse-YYYY-MM-DD.log` |
+
+Logs older than **7 days** are automatically pruned on startup to maintain a minimal disk footprint.
+
+---
+
+## ⚙️ Configuration Schema
+
+DrivePulse persists settings in JSON format matching `config.example.json`:
+
+```json
+{
+  "master_enabled": true,
+  "interval_seconds": 45,
+  "selected_drives": [
+    "D:\\",
+    "E:\\"
+  ],
+  "autostart": true
+}
+```
+
+| Parameter | Type | Default | Required | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `master_enabled` | `bool` | `true` | Yes | Master switch controlling heartbeat activity |
+| `interval_seconds` | `int` | `45` | Yes | Interval between keep-alive pings (in seconds) |
+| `selected_drives` | `array` | `[]` | Yes | Array of drive roots / mount paths to keep awake |
+| `autostart` | `bool` | `false` | No | Whether DrivePulse should start on OS login |
+
+---
+
+## 🛠️ Development & Build Workflow
+
+All development, formatting, testing, and compilation workflows are unified in the `Makefile`:
+
+```bash
+make help     # Display available targets and descriptions
+make clean    # Remove builds/ directory and compiled binaries
+make setup    # Download and tidy Go dependencies
+make lint     # Run static analysis (go vet & staticcheck)
+make format   # Format code, organize imports, and run static analysis
+make test     # Run unit tests with code coverage
+make run      # Launch application locally directly from source
+make build    # Cross-compile Windows and Linux binaries with PE icon resources
+```
+
+---
+
+## ❓ Troubleshooting & FAQ
+
+<details>
+<summary><b>Does DrivePulse prevent my computer from sleeping or suspending?</b></summary>
+
+**No.** DrivePulse only writes small micro-timestamp files to selected external disks. It does not call Windows or Linux power assertion APIs (`SetThreadExecutionState` / `org.freedesktop.ScreenSaver`), so your PC will sleep and hibernate normally based on your OS power plan.
+</details>
+
+<details>
+<summary><b>Why does my anti-virus flag newly compiled Go binaries?</b></summary>
+
+Unsigned standalone Go binaries that interact with system tray APIs, registry autostart keys, and disk writes can occasionally trigger heuristic false positives in generic anti-virus engines. DrivePulse is 100% open source under the GPL-3.0 license and contains zero telemetry or hidden network calls. You can inspect all source code in [`src/`](src/) and compile directly using `make build`.
+</details>
+
+<details>
+<summary><b>Why is the tray icon not showing on GNOME Linux?</b></summary>
+
+Modern GNOME desktop environments require the `AppIndicator and KStatusNotifierItem Support` shell extension to render system tray icons. Ensure this extension is installed and enabled on GNOME. On KDE Plasma, XFCE, and Windows 10/11, tray support works natively out of the box.
+</details>
+
+---
+
+## 📄 License
+
+This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+<p align="right">(<a href="#readme-top">back to top ↑</a>)</p>
