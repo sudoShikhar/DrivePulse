@@ -62,11 +62,7 @@ func (c *TrayController) eventLoop() {
 				return
 			}
 			c.engine.TriggerPingNow()
-			go func() {
-				c.pingNowItem.SetTitle("⚡ Pinging...")
-				time.Sleep(1 * time.Second)
-				c.pingNowItem.SetTitle("🔄 Ping Now")
-			}()
+			c.showTemporaryTitle(c.pingNowItem, "⚡ Pinging...", "🔄 Ping Now", 1*time.Second)
 
 		case _, ok := <-c.copyLogsItem.ClickedCh:
 			if !ok {
@@ -76,11 +72,7 @@ func (c *TrayController) eventLoop() {
 			if err != nil {
 				logger.Error("Failed to copy logs to clipboard: %v", err)
 			} else {
-				go func() {
-					c.copyLogsItem.SetTitle("✓ Logs Copied!")
-					time.Sleep(2 * time.Second)
-					c.copyLogsItem.SetTitle("📋 Copy Logs")
-				}()
+				c.showTemporaryTitle(c.copyLogsItem, "✓ Logs Copied!", "📋 Copy Logs", 2*time.Second)
 			}
 
 		case _, ok := <-c.openLogsFolderItem.ClickedCh:
@@ -91,19 +83,11 @@ func (c *TrayController) eventLoop() {
 				logsDir := logger.DefaultLogger.GetLogsDir()
 				if err := platform.OpenFolder(logsDir); err != nil {
 					logger.Error("Failed to open logs folder: %v", err)
-					go func() {
-						c.openLogsFolderItem.SetTitle("⚠️ Error Opening Folder")
-						time.Sleep(2 * time.Second)
-						c.openLogsFolderItem.SetTitle("📂 Open Logs Folder")
-					}()
+					c.showTemporaryTitle(c.openLogsFolderItem, "⚠️ Error Opening Folder", "📂 Open Logs Folder", 2*time.Second)
 				}
 			} else {
 				_ = logger.DefaultLogger.CopyToClipboard()
-				go func() {
-					c.openLogsFolderItem.SetTitle("📋 Copied (Memory Only)")
-					time.Sleep(2 * time.Second)
-					c.openLogsFolderItem.SetTitle("⚠️ Logs (Memory Only)")
-				}()
+				c.showTemporaryTitle(c.openLogsFolderItem, "📋 Copied (Memory Only)", "⚠️ Logs (Memory Only)", 2*time.Second)
 			}
 
 		case _, ok := <-c.autostartItem.ClickedCh:
@@ -167,4 +151,19 @@ func (c *TrayController) handleIntervalClick(seconds int) {
 	_ = c.cfgMgr.SetInterval(seconds)
 	c.engine.SetInterval(seconds)
 	c.RefreshDrivesAndUI()
+}
+
+func (c *TrayController) showTemporaryTitle(item *systray.MenuItem, tempTitle, resetTitle string, duration time.Duration) {
+	if item == nil {
+		return
+	}
+	go func() {
+		item.SetTitle(tempTitle)
+		select {
+		case <-c.stopChan:
+			return
+		case <-time.After(duration):
+			item.SetTitle(resetTitle)
+		}
+	}()
 }

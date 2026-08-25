@@ -227,3 +227,27 @@ func TestTrayControllerPeriodicPoller(t *testing.T) {
 		t.Fatalf("periodicPoller failed to terminate on stopChan")
 	}
 }
+
+func TestTrayControllerShowTemporaryTitle(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "drivepulse_tray_title_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	configPath := filepath.Join(tempDir, "config.json")
+	mgr, err := config.NewConfigManager(configPath)
+	if err != nil {
+		t.Fatalf("NewConfigManager failed: %v", err)
+	}
+
+	eng := engine.NewEngine(nil, 45, true)
+	ctrl := NewTrayController(mgr, eng)
+
+	// Test nil item does not panic
+	ctrl.showTemporaryTitle(nil, "temp", "reset", 10*time.Millisecond)
+
+	// Test cancellation on stop
+	ctrl.stop()
+	ctrl.showTemporaryTitle(nil, "temp", "reset", 50*time.Millisecond)
+}
