@@ -63,7 +63,7 @@ func main() {
 	}
 	defer logger.DefaultLogger.Close()
 
-	logger.Info("Starting DrivePulse v%s (autostart=%v)", Version, *flagAutostart)
+	logger.Info("Starting DrivePulse v%s (Build: %s, autostart=%v)", Version, BuildDate, *flagAutostart)
 
 	cfgMgr, err := config.NewConfigManager(*flagConfig)
 	if err != nil {
@@ -81,6 +81,6 @@ func main() {
 	eng.Start()
 	defer eng.Stop()
 
-	ctrl := tray.NewTrayController(cfgMgr, eng)
+	ctrl := tray.NewTrayController(cfgMgr, eng, Version, BuildDate)
 	ctrl.Run()
 }

@@ -24,7 +24,7 @@ func TestNewTrayControllerInit(t *testing.T) {
 	}
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	if ctrl == nil {
 		t.Fatalf("expected non-nil TrayController")
@@ -37,6 +37,12 @@ func TestNewTrayControllerInit(t *testing.T) {
 	}
 	if ctrl.engine != eng {
 		t.Errorf("expected engine to be assigned")
+	}
+	if ctrl.version != "1.0.0" {
+		t.Errorf("expected version '1.0.0', got %q", ctrl.version)
+	}
+	if ctrl.buildDate != "2026-08-18" {
+		t.Errorf("expected buildDate '2026-08-18', got %q", ctrl.buildDate)
 	}
 }
 
@@ -54,7 +60,7 @@ func TestTrayControllerStopIdempotency(t *testing.T) {
 	}
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	ctrl.stop()
 	ctrl.stop() // Must not panic or deadlock
@@ -82,7 +88,7 @@ func TestTrayControllerOnExit(t *testing.T) {
 
 	eng := engine.NewEngine(nil, 45, true)
 	eng.Start()
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	ctrl.onExit()
 
@@ -108,7 +114,7 @@ func TestTrayControllerHandleIntervalClick(t *testing.T) {
 	}
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	ctrl.handleIntervalClick(90)
 
@@ -132,7 +138,7 @@ func TestTrayControllerHandleDriveClick(t *testing.T) {
 	}
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	// Test nil slot does not panic
 	ctrl.handleDriveClick(nil)
@@ -174,7 +180,7 @@ func TestTrayControllerRefreshDrivesAndUI(t *testing.T) {
 	_ = mgr.SetDriveSelected("NON_EXISTENT_DRIVE_ROOT:\\", true)
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	// Refresh UI without native systray items attached
 	ctrl.RefreshDrivesAndUI()
@@ -209,7 +215,7 @@ func TestTrayControllerPeriodicPoller(t *testing.T) {
 	}
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	done := make(chan struct{})
 	go func() {
@@ -242,7 +248,7 @@ func TestTrayControllerShowTemporaryTitle(t *testing.T) {
 	}
 
 	eng := engine.NewEngine(nil, 45, true)
-	ctrl := NewTrayController(mgr, eng)
+	ctrl := NewTrayController(mgr, eng, "1.0.0", "2026-08-18")
 
 	// Test nil item does not panic
 	ctrl.showTemporaryTitle(nil, "temp", "reset", 10*time.Millisecond)

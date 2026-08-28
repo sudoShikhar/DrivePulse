@@ -17,11 +17,15 @@ import (
 func (c *TrayController) onReady() {
 	systray.SetIcon(assets.GetActiveIcon())
 	systray.SetTitle("DrivePulse")
-	systray.SetTooltip("DrivePulse: External Drive Keep-Alive")
+	systray.SetTooltip(fmt.Sprintf("DrivePulse (v%s): External Drive Keep-Alive", c.version))
 
 	// Header
 	c.headerItem = systray.AddMenuItem("DrivePulse", "Status summary")
 	c.headerItem.Disable()
+
+	// Version
+	c.versionItem = systray.AddMenuItem(fmt.Sprintf("DrivePulse v%s", c.version), fmt.Sprintf("Built: %s", c.buildDate))
+	c.versionItem.Disable()
 
 	systray.AddSeparator()
 
@@ -220,15 +224,15 @@ func (c *TrayController) RefreshDrivesAndUI() {
 			systray.SetIcon(assets.GetDisabledIcon())
 			if !cfg.MasterEnabled {
 				c.headerItem.SetTitle("⚪ DrivePulse: Paused (Master OFF)")
-				systray.SetTooltip("DrivePulse: Paused (Master Switch OFF)")
+				systray.SetTooltip(fmt.Sprintf("DrivePulse (v%s): Paused (Master Switch OFF)", c.version))
 			} else {
 				c.headerItem.SetTitle("⚪ DrivePulse: Inactive (0 drives awake)")
-				systray.SetTooltip("DrivePulse: Inactive (0 drives selected)")
+				systray.SetTooltip(fmt.Sprintf("DrivePulse (v%s): Inactive (0 drives selected)", c.version))
 			}
 		} else if offlineCount > 0 && activeCount == 0 {
 			systray.SetIcon(assets.GetWarningIcon())
 			c.headerItem.SetTitle(fmt.Sprintf("🟡 DrivePulse: Warning (%d drive offline)", offlineCount))
-			systray.SetTooltip(fmt.Sprintf("DrivePulse: Warning (%d drive offline)", offlineCount))
+			systray.SetTooltip(fmt.Sprintf("DrivePulse (v%s): Warning (%d drive offline)", c.version, offlineCount))
 		} else {
 			systray.SetIcon(assets.GetActiveIcon())
 			warningSuffix := ""
@@ -236,7 +240,7 @@ func (c *TrayController) RefreshDrivesAndUI() {
 				warningSuffix = fmt.Sprintf(" [%d offline]", offlineCount)
 			}
 			c.headerItem.SetTitle(fmt.Sprintf("🟢 DrivePulse: Active (%d awake)%s", activeCount, warningSuffix))
-			systray.SetTooltip(fmt.Sprintf("DrivePulse: Active (%d drives awake)", activeCount))
+			systray.SetTooltip(fmt.Sprintf("DrivePulse (v%s): Active (%d drives awake)", c.version, activeCount))
 		}
 	}
 }

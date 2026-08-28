@@ -22,8 +22,11 @@ type TrayController struct {
 	mu                 sync.Mutex
 	cfgMgr             *config.ConfigManager
 	engine             *engine.Engine
+	version            string
+	buildDate          string
 	slots              []*driveSlot
 	headerItem         *systray.MenuItem
+	versionItem        *systray.MenuItem
 	masterItem         *systray.MenuItem
 	pingNowItem        *systray.MenuItem
 	intervalMenu       *systray.MenuItem
@@ -38,10 +41,12 @@ type TrayController struct {
 	stopOnce sync.Once
 }
 
-func NewTrayController(cfgMgr *config.ConfigManager, eng *engine.Engine) *TrayController {
+func NewTrayController(cfgMgr *config.ConfigManager, eng *engine.Engine, version, buildDate string) *TrayController {
 	return &TrayController{
 		cfgMgr:       cfgMgr,
 		engine:       eng,
+		version:      version,
+		buildDate:    buildDate,
 		slots:        make([]*driveSlot, MaxDriveSlots),
 		intervalSubs: make(map[int]*systray.MenuItem),
 		stopChan:     make(chan struct{}),
