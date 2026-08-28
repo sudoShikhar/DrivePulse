@@ -2,6 +2,8 @@
 APP_NAME := DrivePulse
 SRC_DIR := ./src
 BUILDS_DIR := builds
+BIN_WINDOWS := $(APP_NAME)_Windows_x64.exe
+BIN_LINUX := $(APP_NAME)_Linux_x64
 VERSION ?= 1.0.0
 
 ifeq ($(OS),Windows_NT)
@@ -18,7 +20,7 @@ LDFLAGS_LINUX := -s -w -X 'main.Version=$(VERSION)' -X 'main.BuildDate=$(BUILD_D
 
 ## help: Show available targets
 help:
-	@echo DrivePulse Build Targets:
+	@echo $(APP_NAME) Build Targets:
 	@echo   make clean  - Remove $(BUILDS_DIR)/ directory
 	@echo   make setup  - Download and tidy Go dependencies
 	@echo   make lint   - Run static analysis without modifying files
@@ -63,12 +65,12 @@ run:
 build:
 ifeq ($(OS),Windows_NT)
 	@if not exist $(BUILDS_DIR) mkdir $(BUILDS_DIR)
-	powershell -NoProfile -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='windows'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_WINDOWS)\" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR)"
-	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
-	powershell -NoProfile -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='linux'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_LINUX)\" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)"
+	powershell -NoProfile -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='windows'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_WINDOWS)\" -o $(BUILDS_DIR)/$(BIN_WINDOWS) $(SRC_DIR)"
+	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(BIN_WINDOWS)
+	powershell -NoProfile -Command "$$env:CGO_ENABLED='0'; $$env:GOOS='linux'; $$env:GOARCH='amd64'; go build -ldflags=\"$(LDFLAGS_LINUX)\" -o $(BUILDS_DIR)/$(BIN_LINUX) $(SRC_DIR)"
 else
 	mkdir -p $(BUILDS_DIR)
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS_WINDOWS)" -o $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe $(SRC_DIR)
-	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(APP_NAME)-windows-x64.exe
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS_LINUX)" -o $(BUILDS_DIR)/$(APP_NAME)-linux-x64 $(SRC_DIR)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS_WINDOWS)" -o $(BUILDS_DIR)/$(BIN_WINDOWS) $(SRC_DIR)
+	go tool go-winres patch --in src/winres/winres.json --no-backup $(BUILDS_DIR)/$(BIN_WINDOWS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS_LINUX)" -o $(BUILDS_DIR)/$(BIN_LINUX) $(SRC_DIR)
 endif

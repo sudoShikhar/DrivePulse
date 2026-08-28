@@ -82,7 +82,7 @@ jobs:
       - name: Generate SHA256 Checksums
         run: |
           cd builds
-          sha256sum DrivePulse-windows-x64.exe DrivePulse-linux-x64 > checksums.txt
+          sha256sum DrivePulse_* > checksums.txt
           cat checksums.txt
 
       - name: Generate Structured Changelog
@@ -157,9 +157,7 @@ jobs:
             ### 📦 Artifacts & Integrity
             Binary assets are attached below along with `checksums.txt` (SHA256).
           files: |
-            builds/DrivePulse-windows-x64.exe
-            builds/DrivePulse-linux-x64
-            builds/checksums.txt
+            builds/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

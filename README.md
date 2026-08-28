@@ -17,8 +17,8 @@
 <br/>
 
 <!-- Call to Action (CTA) Download Buttons & Cloud IDEs -->
-[![Download Windows EXE](https://img.shields.io/badge/Windows_EXE-Direct_Download-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-windows-x64.exe)
-[![Download Linux Binary](https://img.shields.io/badge/Linux_Binary-Direct_Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-linux-x64)
+[![Download Windows EXE](https://img.shields.io/badge/Windows_EXE-Direct_Download-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse_Windows_x64.exe)
+[![Download Linux Binary](https://img.shields.io/badge/Linux_Binary-Direct_Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse_Linux_x64)
 [![Open in VS Code](https://img.shields.io/badge/Open_in-VS_Code_Web-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/github/sudoShikhar/DrivePulse)
 [![Open in GitHub Codespaces](https://img.shields.io/badge/Open_in-Codespaces-181717?style=for-the-badge&logo=github&logoColor=white)](https://codespaces.new/sudoShikhar/DrivePulse)
 
@@ -52,8 +52,8 @@
 ### Option 1: Direct Binary Download (Recommended)
 Download the latest standalone binary directly for your platform:
 
-* **Windows**: [**DrivePulse-windows-x64.exe**](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-windows-x64.exe) — direct standalone executable, zero dependencies.
-* **Linux**: [**DrivePulse-linux-x64**](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse-linux-x64) — make executable (`chmod +x DrivePulse-linux-x64`) and run `./DrivePulse-linux-x64`.
+* **Windows**: [**DrivePulse_Windows_x64.exe**](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse_Windows_x64.exe) — direct standalone executable, zero dependencies.
+* **Linux**: [**DrivePulse_Linux_x64**](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/DrivePulse_Linux_x64) — make executable (`chmod +x DrivePulse_Linux_x64`) and run `./DrivePulse_Linux_x64`.
 * **Integrity & Release Hub**: [checksums.txt (SHA256)](https://github.com/sudoShikhar/DrivePulse/releases/latest/download/checksums.txt) | [All Releases & Notes](https://github.com/sudoShikhar/DrivePulse/releases)
 
 ### Option 2: Build & Run from Source
